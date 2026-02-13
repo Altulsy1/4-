@@ -757,14 +757,16 @@ class FirebaseGame {
         };
         
         // تهيئة Firebase
-        this.firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
+       // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDeOQuQ2umGELjT8wNIw9vJr613Fxj1Dg0",
+  authDomain: "kin-tien.firebaseapp.com",
+  projectId: "kin-tien",
+  storageBucket: "kin-tien.firebasestorage.app",
+  messagingSenderId: "285420896766",
+  appId: "1:285420896766:web:234ee65007d9333c1200af",
+  measurementId: "G-X8W7Y7Z72P"
+};
         
         this.initFirebase();
     }
