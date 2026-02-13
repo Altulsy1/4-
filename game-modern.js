@@ -742,228 +742,395 @@ ModernGame.prototype.init = function() {
         this.showScreen('main-menu');
     });
 };
-// ===========================================
-// نظام الاتصال المحلي المتقدم - Local Connection System
-// ===========================================
+// game-firebase.js - نسخة Firebase المتكاملة
 
-class LocalConnection {
+class FirebaseGame {
     constructor() {
-        this.peers = new Map();
-        this.connections = new Map();
-        this.localIp = null;
-        this.isHost = false;
-        this.onDataCallbacks = [];
-        this.connectionStatus = 'disconnected';
+        this.state = {
+            playerId: null,
+            playerName: localStorage.getItem('playerName') || 'لاعب',
+            roomId: null,
+            isHost: false,
+            players: {},
+            gameData: null,
+            unsubscribeFunctions: []
+        };
         
-        // الحصول على IP المحلي
-        this.getLocalIP();
+        // تهيئة Firebase
+        this.firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        this.initFirebase();
     }
     
-    // الحصول على IP المحلي
-    getLocalIP() {
-        return new Promise((resolve) => {
-            const RTCPeerConnection = window.RTCPeerConnection || 
-                                    window.webkitRTCPeerConnection || 
-                                    window.mozRTCPeerConnection;
-            
-            if (!RTCPeerConnection) {
-                console.log('WebRTC غير مدعوم');
-                resolve(null);
-                return;
-            }
-            
-            const pc = new RTCPeerConnection({ iceServers: [] });
-            pc.createDataChannel('');
-            
-            pc.createOffer()
-                .then(offer => pc.setLocalDescription(offer))
-                .catch(console.log);
-            
-            pc.onicecandidate = (ice) => {
-                if (!ice || !ice.candidate || !ice.candidate.candidate) return;
-                
-                const ipRegex = /([0-9]{1,3}(\.[0-9]{1,3}){3})/;
-                const ipMatch = ipRegex.exec(ice.candidate.candidate);
-                
-                if (ipMatch) {
-                    this.localIp = ipMatch[1];
-                    console.log('IP المحلي:', this.localIp);
-                    resolve(this.localIp);
-                    pc.close();
-                }
-            };
-            
-            // مهلة 3 ثوان
-            setTimeout(() => {
-                if (!this.localIp) {
-                    this.localIp = '192.168.1.' + Math.floor(Math.random() * 100 + 100);
-                    resolve(this.localIp);
-                }
-                pc.close();
-            }, 3000);
-        });
+    // تهيئة Firebase
+    async initFirebase() {
+        // التأكد من تحميل Firebase SDK
+        if (!firebase.apps.length) {
+            firebase.initializeApp(this.firebaseConfig);
+        }
+        
+        this.db = firebase.firestore();
+        this.rtdb = firebase.database(); // للمزامنة الفورية
+        
+        console.log('✅ Firebase initialized');
     }
     
-    // إنشاء غرفة كمضيف
-    async createRoom(roomCode, playerData) {
-        this.isHost = true;
-        this.roomCode = roomCode;
-        this.playerData = playerData;
-        this.connectionStatus = 'hosting';
+    // إنشاء غرفة جديدة
+    async createRoom() {
+        this.state.isHost = true;
+        this.state.roomId = this.generateRoomCode();
+        this.state.playerId = 'host_' + Date.now();
         
-        // بدء بث وجود الغرفة
-        this.startBroadcasting();
-        
-        // الاستماع للاتصالات الواردة
-        this.listenForConnections();
-        
-        return { success: true, roomCode };
+        try {
+            // إنشاء وثيقة الغرفة في Firestore
+            await this.db.collection('rooms').doc(this.state.roomId).set({
+                hostId: this.state.playerId,
+                hostName: this.state.playerName,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                status: 'waiting',
+                players: {
+                    [this.state.playerId]: {
+                        name: this.state.playerName,
+                        avatar: this.state.avatar,
+                        isHost: true,
+                        joinedAt: new Date().toISOString()
+                    }
+                },
+                playerCount: 1,
+                maxPlayers: 4,
+                gameState: null
+            });
+            
+            // الاستماع للتغييرات في الغرفة
+            this.listenToRoomChanges();
+            
+            // الاستماع للاعبين الجدد
+            this.listenToPlayers();
+            
+            this.showScreen('lobby');
+            this.updateLobbyDisplay();
+            this.generateQRCode();
+            
+            this.showToast('✅ تم إنشاء الغرفة بنجاح', 'success');
+            
+        } catch (error) {
+            console.error('خطأ في إنشاء الغرفة:', error);
+            this.showToast('❌ فشل إنشاء الغرفة', 'error');
+        }
     }
     
     // الانضمام إلى غرفة
-    async joinRoom(roomCode, playerData) {
-        this.isHost = false;
-        this.roomCode = roomCode;
-        this.playerData = playerData;
+    async joinRoom(roomCode) {
+        this.state.roomId = roomCode;
+        this.state.playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         
-        // البحث عن المضيف
-        return this.discoverHost();
+        try {
+            // التحقق من وجود الغرفة
+            const roomDoc = await this.db.collection('rooms').doc(roomCode).get();
+            
+            if (!roomDoc.exists) {
+                this.showToast('❌ الغرفة غير موجودة', 'error');
+                return;
+            }
+            
+            const roomData = roomDoc.data();
+            
+            if (roomData.playerCount >= roomData.maxPlayers) {
+                this.showToast('❌ الغرفة ممتلئة', 'error');
+                return;
+            }
+            
+            // إضافة اللاعب إلى الغرفة
+            await this.db.collection('rooms').doc(roomCode).update({
+                [`players.${this.state.playerId}`]: {
+                    name: this.state.playerName,
+                    avatar: this.state.avatar,
+                    isHost: false,
+                    joinedAt: new Date().toISOString()
+                },
+                playerCount: roomData.playerCount + 1
+            });
+            
+            // الاستماع للتغييرات
+            this.listenToRoomChanges();
+            this.listenToPlayers();
+            
+            this.showScreen('lobby');
+            this.showToast('✅ تم الانضمام للغرفة', 'success');
+            
+        } catch (error) {
+            console.error('خطأ في الانضمام:', error);
+            this.showToast('❌ فشل الانضمام', 'error');
+        }
     }
     
-    // بث وجود الغرفة (باستخدام BroadcastChannel)
-    startBroadcasting() {
-        // استخدام BroadcastChannel للاتصال بين التبويبات
-        this.bc = new BroadcastChannel(`fruit_game_${this.roomCode}`);
-        
-        this.bc.onmessage = (event) => {
-            if (event.data.type === 'DISCOVER_HOST') {
-                // رد على طلبات الاكتشاف
-                this.bc.postMessage({
-                    type: 'HOST_FOUND',
-                    hostData: {
-                        name: this.playerData.name,
-                        avatar: this.playerData.avatar,
-                        roomCode: this.roomCode
+    // الاستماع لتغييرات الغرفة
+    listenToRoomChanges() {
+        const unsubscribe = this.db.collection('rooms')
+            .doc(this.state.roomId)
+            .onSnapshot((doc) => {
+                if (doc.exists) {
+                    const roomData = doc.data();
+                    
+                    // تحديث قائمة اللاعبين
+                    this.state.players = roomData.players || {};
+                    
+                    // تحديث الواجهة
+                    this.updatePlayersList(roomData.players);
+                    
+                    // التحقق من بدء اللعبة
+                    if (roomData.status === 'playing' && !this.state.gameData) {
+                        this.startGameFromFirebase(roomData.gameState);
                     }
-                });
-            } else if (event.data.type === 'JOIN_REQUEST') {
-                // طلب انضمام جديد
-                this.handleJoinRequest(event.data.player);
-            }
-        };
-        
-        // بث دوري للتأكد من وجود المضيف
-        this.broadcastInterval = setInterval(() => {
-            this.bc.postMessage({
-                type: 'HOST_ALIVE',
-                timestamp: Date.now()
+                    
+                    // التحقق من انتهاء الجولة
+                    if (roomData.gameState?.roundWinner) {
+                        this.showWinnerFromFirebase(roomData.gameState);
+                    }
+                }
+            }, (error) => {
+                console.error('خطأ في الاستماع:', error);
             });
-        }, 2000);
+        
+        this.state.unsubscribeFunctions.push(unsubscribe);
     }
     
-    // البحث عن المضيف
-    discoverHost() {
-        return new Promise((resolve) => {
-            const discoveryChannel = new BroadcastChannel(`fruit_game_${this.roomCode}`);
-            
-            // الاستماع لرد المضيف
-            discoveryChannel.onmessage = (event) => {
-                if (event.data.type === 'HOST_FOUND') {
-                    // تم العثور على المضيف
-                    console.log('تم العثور على المضيف:', event.data);
-                    
-                    // إرسال طلب انضمام
-                    discoveryChannel.postMessage({
-                        type: 'JOIN_REQUEST',
-                        player: this.playerData
-                    });
-                    
-                    resolve({ success: true, host: event.data.hostData });
-                } else if (event.data.type === 'JOIN_ACCEPTED') {
-                    // تم قبول الانضمام
-                    this.connectionStatus = 'connected';
-                    this.peers.set('host', event.data.hostData);
-                    
-                    // بدء الاتصال المباشر
-                    this.establishDirectConnection(event.data.hostData);
-                    
-                    resolve({ success: true, connected: true });
-                }
-            };
-            
-            // إرسال طلب اكتشاف المضيف
-            discoveryChannel.postMessage({
-                type: 'DISCOVER_HOST',
-                timestamp: Date.now()
-            });
-            
-            // مهلة 5 ثوان
-            setTimeout(() => {
-                if (this.connectionStatus !== 'connected') {
-                    // جرب الاتصال المباشر بعنوان IP
-                    this.tryDirectConnection();
-                }
-            }, 5000);
+    // الاستماع للاعبين في الوقت الفعلي (Realtime Database)
+    listenToPlayers() {
+        const playersRef = this.rtdb.ref(`rooms/${this.state.roomId}/players`);
+        
+        const unsubscribe = playersRef.on('value', (snapshot) => {
+            const players = snapshot.val() || {};
+            this.updatePlayersStatus(players);
+        });
+        
+        this.state.unsubscribeFunctions.push(() => {
+            playersRef.off('value', unsubscribe);
         });
     }
     
-    // محاولة الاتصال المباشر
-    tryDirectConnection() {
-        // محاولة الاتصال عبر WebSocket محلي
-        const wsUrl = `ws://${this.localIp}:8080`;
-        const ws = new WebSocket(wsUrl);
+    // تحديث قائمة اللاعبين في الواجهة
+    updatePlayersList(players) {
+        const playersGrid = document.getElementById('players-grid');
+        if (!playersGrid) return;
         
-        ws.onopen = () => {
-            console.log('WebSocket متصل محلياً');
-            ws.send(JSON.stringify({
-                type: 'JOIN',
-                room: this.roomCode,
-                player: this.playerData
-            }));
-        };
+        // تنظيف الخانات
+        playersGrid.innerHTML = '';
         
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'WELCOME') {
-                this.connectionStatus = 'connected';
-                this.showToast('تم الاتصال بالمضيف محلياً', 'success');
-            }
-        };
-    }
-    
-    // معالجة طلب انضمام
-    handleJoinRequest(playerData) {
-        // إضافة اللاعب الجديد
-        const playerId = 'player_' + Date.now();
-        this.connections.set(playerId, {
-            ...playerData,
-            id: playerId,
-            connected: true
+        // تحويل كائن اللاعبين إلى مصفوفة
+        const playersArray = Object.entries(players || {}).map(([id, data]) => ({
+            id,
+            ...data
+        }));
+        
+        // عرض كل لاعب
+        playersArray.forEach(player => {
+            const playerCard = document.createElement('div');
+            playerCard.className = `player-card ${player.isHost ? 'host-card' : ''}`;
+            playerCard.innerHTML = `
+                <div class="player-avatar large">
+                    <img src="${player.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + player.id}" alt="">
+                </div>
+                <div class="player-name">${player.name}</div>
+                ${player.isHost ? '<div class="player-badge host-badge">المضيف</div>' : ''}
+                <div class="connection-status online"></div>
+            `;
+            playersGrid.appendChild(playerCard);
         });
         
-        // قبول الانضمام
-        if (this.bc) {
-            this.bc.postMessage({
-                type: 'JOIN_ACCEPTED',
-                playerId: playerId,
-                hostData: this.playerData
-            });
+        // إضافة خانات فارغة
+        for (let i = playersArray.length; i < 4; i++) {
+            const emptyCard = document.createElement('div');
+            emptyCard.className = 'player-card empty-card';
+            emptyCard.innerHTML = `
+                <div class="empty-icon">👤</div>
+                <div class="empty-text">انتظار...</div>
+            `;
+            playersGrid.appendChild(emptyCard);
         }
         
-        // إخطار المستمعين
-        this.onDataCallbacks.forEach(cb => {
-            cb({
-                type: 'player_joined',
-                player: {
-                    id: playerId,
-                    ...playerData
-                }
-            });
-        });
+        // تحديث العداد
+        const countElement = document.getElementById('player-count');
+        if (countElement) {
+            countElement.textContent = `${playersArray.length}/4`;
+        }
         
-        this.updatePlayersList();
+        // تفعيل/تعطيل زر البدء
+        const startBtn = document.getElementById('start-game-btn');
+        if (startBtn) {
+            if (this.state.isHost && playersArray.length >= 2) {
+                startBtn.classList.remove('disabled');
+                startBtn.disabled = false;
+            } else {
+                startBtn.classList.add('disabled');
+                startBtn.disabled = true;
+            }
+        }
     }
     
+    // بدء اللعبة (للمضيف)
+    async startGame() {
+        if (!this.state.isHost) return;
+        
+        try {
+            // توزيع البطاقات
+            const gameState = this.initializeGameState();
+            
+            // تحديث حالة الغرفة في Firestore
+            await this.db.collection('rooms').doc(this.state.roomId).update({
+                status: 'playing',
+                gameState: gameState,
+                startedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // إرسال إشارة البدء عبر Realtime Database (أسرع)
+            await this.rtdb.ref(`rooms/${this.state.roomId}/game`).set({
+                status: 'started',
+                timestamp: Date.now(),
+                gameState: gameState
+            });
+            
+            this.showScreen('game');
+            this.displayGameUI(gameState);
+            
+        } catch (error) {
+            console.error('خطأ في بدء اللعبة:', error);
+            this.showToast('❌ فشل بدء اللعبة', 'error');
+        }
+    }
+    
+    // تهيئة حالة اللعبة
+    initializeGameState() {
+        const fruits = ['🍎', '🍌', '🍊', '🍇', '🍓', '🍉', '🍒', '🍍'];
+        const playersCards = {};
+        
+        // توزيع البطاقات على اللاعبين
+        Object.keys(this.state.players).forEach((playerId, index) => {
+            const playerCards = [];
+            for (let i = 0; i < 4; i++) {
+                const fruitIndex = Math.floor(Math.random() * fruits.length);
+                playerCards.push({
+                    id: `card-${playerId}-${i}`,
+                    emoji: fruits[fruitIndex],
+                    fruitId: fruitIndex
+                });
+            }
+            playersCards[playerId] = playerCards;
+        });
+        
+        return {
+            currentRound: 1,
+            playersCards: playersCards,
+            roundWinner: null,
+            startTime: Date.now(),
+            moves: []
+        };
+    }
+    
+    // عند فوز لاعب
+    async pressWinButton() {
+        if (this.state.gameData?.roundWinner) return;
+        
+        try {
+            // تحديث الفائز في Firebase
+            await this.rtdb.ref(`rooms/${this.state.roomId}/game/roundWinner`).set({
+                playerId: this.state.playerId,
+                playerName: this.state.playerName,
+                timestamp: Date.now(),
+                roundTime: Math.floor((Date.now() - this.state.gameData.startTime) / 1000)
+            });
+            
+            // تحديث في Firestore أيضاً للتخزين الدائم
+            await this.db.collection('rooms').doc(this.state.roomId).update({
+                'gameState.roundWinner': this.state.playerId,
+                'gameState.winTime': Date.now()
+            });
+            
+            this.triggerHaptic('heavy');
+            this.launchConfetti();
+            
+        } catch (error) {
+            console.error('خطأ في تسجيل الفوز:', error);
+        }
+    }
+    
+    // الاستماع للفائز
+    listenForWinner() {
+        const winnerRef = this.rtdb.ref(`rooms/${this.state.roomId}/game/roundWinner`);
+        
+        winnerRef.on('value', (snapshot) => {
+            const winner = snapshot.val();
+            if (winner && winner.playerId !== this.state.playerId) {
+                // لاعب آخر فاز
+                this.showWinner({
+                    playerId: winner.playerId,
+                    playerName: winner.playerName,
+                    time: winner.roundTime
+                });
+            }
+        });
+    }
+    
+    // إرسال حركة في اللعبة
+    async sendGameAction(action) {
+        const actionsRef = this.rtdb.ref(`rooms/${this.state.roomId}/actions`).push();
+        
+        await actionsRef.set({
+            playerId: this.state.playerId,
+            action: action,
+            timestamp: Date.now()
+        });
+    }
+    
+    // تنظيف الاتصالات عند الخروج
+    async leaveRoom() {
+        try {
+            // إزالة اللاعب من الغرفة
+            if (this.state.roomId) {
+                await this.db.collection('rooms').doc(this.state.roomId).update({
+                    [`players.${this.state.playerId}`]: firebase.firestore.FieldValue.delete(),
+                    playerCount: firebase.firestore.FieldValue.increment(-1)
+                });
+                
+                // إلغاء الاستماع
+                this.state.unsubscribeFunctions.forEach(unsub => {
+                    if (typeof unsub === 'function') unsub();
+                });
+                
+                // حذف الغرفة إذا كان المضيف وغادر الجميع
+                if (this.state.isHost) {
+                    const roomDoc = await this.db.collection('rooms').doc(this.state.roomId).get();
+                    if (roomDoc.exists && roomDoc.data().playerCount <= 0) {
+                        await this.db.collection('rooms').doc(this.state.roomId).delete();
+                    }
+                }
+            }
+            
+            this.showScreen('main-menu');
+            this.showToast('👋 تم الخروج من الغرفة', 'info');
+            
+        } catch (error) {
+            console.error('خطأ في الخروج:', error);
+        }
+    }
+    
+    // توليد رمز الغرفة
+    generateRoomCode() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for (let i = 0; i < 4; i++) {
+            code += chars[Math.floor(Math.random() * chars.length)];
+        }
+        return code;
+    }
+}
     // إنشاء اتصال مباشر P2P
     establishDirectConnection(peerData) {
         // استخدام WebRTC للاتصال المباشر
