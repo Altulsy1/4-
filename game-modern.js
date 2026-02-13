@@ -742,3 +742,525 @@ ModernGame.prototype.init = function() {
         this.showScreen('main-menu');
     });
 };
+// ===========================================
+// نظام الاتصال المحلي المتقدم - Local Connection System
+// ===========================================
+
+class LocalConnection {
+    constructor() {
+        this.peers = new Map();
+        this.connections = new Map();
+        this.localIp = null;
+        this.isHost = false;
+        this.onDataCallbacks = [];
+        this.connectionStatus = 'disconnected';
+        
+        // الحصول على IP المحلي
+        this.getLocalIP();
+    }
+    
+    // الحصول على IP المحلي
+    getLocalIP() {
+        return new Promise((resolve) => {
+            const RTCPeerConnection = window.RTCPeerConnection || 
+                                    window.webkitRTCPeerConnection || 
+                                    window.mozRTCPeerConnection;
+            
+            if (!RTCPeerConnection) {
+                console.log('WebRTC غير مدعوم');
+                resolve(null);
+                return;
+            }
+            
+            const pc = new RTCPeerConnection({ iceServers: [] });
+            pc.createDataChannel('');
+            
+            pc.createOffer()
+                .then(offer => pc.setLocalDescription(offer))
+                .catch(console.log);
+            
+            pc.onicecandidate = (ice) => {
+                if (!ice || !ice.candidate || !ice.candidate.candidate) return;
+                
+                const ipRegex = /([0-9]{1,3}(\.[0-9]{1,3}){3})/;
+                const ipMatch = ipRegex.exec(ice.candidate.candidate);
+                
+                if (ipMatch) {
+                    this.localIp = ipMatch[1];
+                    console.log('IP المحلي:', this.localIp);
+                    resolve(this.localIp);
+                    pc.close();
+                }
+            };
+            
+            // مهلة 3 ثوان
+            setTimeout(() => {
+                if (!this.localIp) {
+                    this.localIp = '192.168.1.' + Math.floor(Math.random() * 100 + 100);
+                    resolve(this.localIp);
+                }
+                pc.close();
+            }, 3000);
+        });
+    }
+    
+    // إنشاء غرفة كمضيف
+    async createRoom(roomCode, playerData) {
+        this.isHost = true;
+        this.roomCode = roomCode;
+        this.playerData = playerData;
+        this.connectionStatus = 'hosting';
+        
+        // بدء بث وجود الغرفة
+        this.startBroadcasting();
+        
+        // الاستماع للاتصالات الواردة
+        this.listenForConnections();
+        
+        return { success: true, roomCode };
+    }
+    
+    // الانضمام إلى غرفة
+    async joinRoom(roomCode, playerData) {
+        this.isHost = false;
+        this.roomCode = roomCode;
+        this.playerData = playerData;
+        
+        // البحث عن المضيف
+        return this.discoverHost();
+    }
+    
+    // بث وجود الغرفة (باستخدام BroadcastChannel)
+    startBroadcasting() {
+        // استخدام BroadcastChannel للاتصال بين التبويبات
+        this.bc = new BroadcastChannel(`fruit_game_${this.roomCode}`);
+        
+        this.bc.onmessage = (event) => {
+            if (event.data.type === 'DISCOVER_HOST') {
+                // رد على طلبات الاكتشاف
+                this.bc.postMessage({
+                    type: 'HOST_FOUND',
+                    hostData: {
+                        name: this.playerData.name,
+                        avatar: this.playerData.avatar,
+                        roomCode: this.roomCode
+                    }
+                });
+            } else if (event.data.type === 'JOIN_REQUEST') {
+                // طلب انضمام جديد
+                this.handleJoinRequest(event.data.player);
+            }
+        };
+        
+        // بث دوري للتأكد من وجود المضيف
+        this.broadcastInterval = setInterval(() => {
+            this.bc.postMessage({
+                type: 'HOST_ALIVE',
+                timestamp: Date.now()
+            });
+        }, 2000);
+    }
+    
+    // البحث عن المضيف
+    discoverHost() {
+        return new Promise((resolve) => {
+            const discoveryChannel = new BroadcastChannel(`fruit_game_${this.roomCode}`);
+            
+            // الاستماع لرد المضيف
+            discoveryChannel.onmessage = (event) => {
+                if (event.data.type === 'HOST_FOUND') {
+                    // تم العثور على المضيف
+                    console.log('تم العثور على المضيف:', event.data);
+                    
+                    // إرسال طلب انضمام
+                    discoveryChannel.postMessage({
+                        type: 'JOIN_REQUEST',
+                        player: this.playerData
+                    });
+                    
+                    resolve({ success: true, host: event.data.hostData });
+                } else if (event.data.type === 'JOIN_ACCEPTED') {
+                    // تم قبول الانضمام
+                    this.connectionStatus = 'connected';
+                    this.peers.set('host', event.data.hostData);
+                    
+                    // بدء الاتصال المباشر
+                    this.establishDirectConnection(event.data.hostData);
+                    
+                    resolve({ success: true, connected: true });
+                }
+            };
+            
+            // إرسال طلب اكتشاف المضيف
+            discoveryChannel.postMessage({
+                type: 'DISCOVER_HOST',
+                timestamp: Date.now()
+            });
+            
+            // مهلة 5 ثوان
+            setTimeout(() => {
+                if (this.connectionStatus !== 'connected') {
+                    // جرب الاتصال المباشر بعنوان IP
+                    this.tryDirectConnection();
+                }
+            }, 5000);
+        });
+    }
+    
+    // محاولة الاتصال المباشر
+    tryDirectConnection() {
+        // محاولة الاتصال عبر WebSocket محلي
+        const wsUrl = `ws://${this.localIp}:8080`;
+        const ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => {
+            console.log('WebSocket متصل محلياً');
+            ws.send(JSON.stringify({
+                type: 'JOIN',
+                room: this.roomCode,
+                player: this.playerData
+            }));
+        };
+        
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'WELCOME') {
+                this.connectionStatus = 'connected';
+                this.showToast('تم الاتصال بالمضيف محلياً', 'success');
+            }
+        };
+    }
+    
+    // معالجة طلب انضمام
+    handleJoinRequest(playerData) {
+        // إضافة اللاعب الجديد
+        const playerId = 'player_' + Date.now();
+        this.connections.set(playerId, {
+            ...playerData,
+            id: playerId,
+            connected: true
+        });
+        
+        // قبول الانضمام
+        if (this.bc) {
+            this.bc.postMessage({
+                type: 'JOIN_ACCEPTED',
+                playerId: playerId,
+                hostData: this.playerData
+            });
+        }
+        
+        // إخطار المستمعين
+        this.onDataCallbacks.forEach(cb => {
+            cb({
+                type: 'player_joined',
+                player: {
+                    id: playerId,
+                    ...playerData
+                }
+            });
+        });
+        
+        this.updatePlayersList();
+    }
+    
+    // إنشاء اتصال مباشر P2P
+    establishDirectConnection(peerData) {
+        // استخدام WebRTC للاتصال المباشر
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ]
+        };
+        
+        const peerConnection = new RTCPeerConnection(configuration);
+        
+        // إنشاء قناة بيانات
+        const dataChannel = peerConnection.createDataChannel('game');
+        
+        dataChannel.onopen = () => {
+            console.log('قناة البيانات مفتوحة');
+            this.connectionStatus = 'p2p_connected';
+        };
+        
+        dataChannel.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            this.handleGameData(data);
+        };
+        
+        // تبادل معلومات الاتصال عبر BroadcastChannel
+        this.exchangeSignalingData(peerConnection);
+    }
+    
+    // تبادل بيانات الإشارة
+    exchangeSignalingData(pc) {
+        const signalingChannel = new BroadcastChannel(`signaling_${this.roomCode}`);
+        
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                signalingChannel.postMessage({
+                    type: 'candidate',
+                    candidate: event.candidate
+                });
+            }
+        };
+        
+        pc.createOffer()
+            .then(offer => pc.setLocalDescription(offer))
+            .then(() => {
+                signalingChannel.postMessage({
+                    type: 'offer',
+                    sdp: pc.localDescription
+                });
+            });
+        
+        signalingChannel.onmessage = (event) => {
+            const data = event.data;
+            if (data.type === 'answer') {
+                pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            } else if (data.type === 'candidate') {
+                pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        };
+    }
+    
+    // إرسال بيانات اللعبة
+    sendGameData(data, target = 'all') {
+        if (target === 'all') {
+            this.connections.forEach((_, id) => {
+                this.sendToPeer(id, data);
+            });
+        } else {
+            this.sendToPeer(target, data);
+        }
+        
+        // إذا كان هناك اتصال WebRTC، أرسل عبره
+        if (this.dataChannel && this.dataChannel.readyState === 'open') {
+            this.dataChannel.send(JSON.stringify(data));
+        }
+    }
+    
+    sendToPeer(peerId, data) {
+        // إرسال عبر BroadcastChannel
+        if (this.bc) {
+            this.bc.postMessage({
+                type: 'GAME_DATA',
+                target: peerId,
+                data: data,
+                timestamp: Date.now()
+            });
+        }
+    }
+    
+    // معالجة بيانات اللعبة
+    handleGameData(data) {
+        console.log('بيانات اللعبة:', data);
+        this.onDataCallbacks.forEach(cb => cb(data));
+    }
+    
+    // تسجيل مستمع للبيانات
+    onData(callback) {
+        this.onDataCallbacks.push(callback);
+    }
+    
+    // تحديث قائمة اللاعبين
+    updatePlayersList() {
+        const playersGrid = document.getElementById('players-grid');
+        if (!playersGrid) return;
+        
+        // تنظيف الخانات الفارغة
+        const existingCards = playersGrid.querySelectorAll('.player-card:not(.host-card)');
+        existingCards.forEach(card => card.remove());
+        
+        // إضافة اللاعبين المتصلين
+        this.connections.forEach((player, id) => {
+            const playerCard = document.createElement('div');
+            playerCard.className = 'player-card';
+            playerCard.innerHTML = `
+                <div class="player-avatar large">
+                    <img src="${player.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + id}" alt="">
+                </div>
+                <div class="player-name">${player.name}</div>
+                <div class="player-badge">متصل</div>
+            `;
+            playersGrid.appendChild(playerCard);
+        });
+        
+        // إضافة خانات فارغة
+        const remainingSlots = 4 - (this.connections.size + 1); // +1 للمضيف
+        for (let i = 0; i < remainingSlots; i++) {
+            const emptyCard = document.createElement('div');
+            emptyCard.className = 'player-card empty-card';
+            emptyCard.innerHTML = `
+                <div class="empty-icon">👤</div>
+                <div class="empty-text">انتظار...</div>
+            `;
+            playersGrid.appendChild(emptyCard);
+        }
+        
+        // تحديث عداد اللاعبين
+        const playerCount = document.getElementById('player-count');
+        if (playerCount) {
+            playerCount.textContent = `${this.connections.size + 1}/4`;
+        }
+        
+        // تفعيل زر البدء إذا اكتمل العدد
+        const startBtn = document.getElementById('start-game-btn');
+        if (startBtn) {
+            if (this.connections.size >= 1) {
+                startBtn.classList.remove('disabled');
+                startBtn.disabled = false;
+            }
+        }
+    }
+    
+    // قطع الاتصال
+    disconnect() {
+        if (this.bc) {
+            this.bc.close();
+        }
+        if (this.broadcastInterval) {
+            clearInterval(this.broadcastInterval);
+        }
+        this.connections.clear();
+        this.peers.clear();
+        this.connectionStatus = 'disconnected';
+    }
+    
+    showToast(message, type) {
+        if (window.game && window.game.showToast) {
+            window.game.showToast(message, type);
+        } else {
+            alert(message);
+        }
+    }
+}
+
+// ===========================================
+// دمج النظام مع اللعبة الحالية
+// ===========================================
+
+// تعديل دالة createRoom في ModernGame
+ModernGame.prototype.createRoom = async function() {
+    this.state.isHost = true;
+    this.state.roomId = this.generateRoomCode();
+    
+    // تهيئة الاتصال المحلي
+    this.localConnection = new LocalConnection();
+    
+    try {
+        await this.localConnection.createRoom(this.state.roomId, {
+            name: this.state.playerName,
+            avatar: this.state.avatar,
+            id: this.state.playerId || 'host_' + Date.now()
+        });
+        
+        // الاستماع للبيانات الواردة
+        this.localConnection.onData((data) => {
+            this.handleNetworkData(data);
+        });
+        
+        this.showScreen('lobby');
+        this.updateLobbyDisplay();
+        this.generateQRCode();
+        
+        this.playSound('create');
+        this.showToast('تم إنشاء الغرفة محلياً', 'success');
+        
+    } catch (error) {
+        console.error('فشل إنشاء الغرفة:', error);
+        this.showToast('فشل الاتصال المحلي', 'error');
+    }
+};
+
+// تعديل دالة الانضمام
+ModernGame.prototype.joinRoom = function(roomCode) {
+    this.state.isHost = false;
+    this.state.roomId = roomCode;
+    
+    this.localConnection = new LocalConnection();
+    
+    this.localConnection.joinRoom(roomCode, {
+        name: this.state.playerName,
+        avatar: this.state.avatar,
+        id: 'player_' + Date.now()
+    }).then((result) => {
+        if (result.success) {
+            this.showScreen('lobby');
+            this.showToast('تم الانضمام للغرفة', 'success');
+        }
+    }).catch((error) => {
+        this.showToast('فشل الانضمام للغرفة', 'error');
+    });
+};
+
+// معالجة بيانات الشبكة
+ModernGame.prototype.handleNetworkData = function(data) {
+    console.log('بيانات واردة:', data);
+    
+    if (data.type === 'player_joined') {
+        // تحديث قائمة اللاعبين
+        if (this.localConnection) {
+            this.localConnection.updatePlayersList();
+        }
+    } else if (data.type === 'game-start') {
+        // بدء اللعبة
+        this.showScreen('game');
+        this.initializeRound();
+    } else if (data.type === 'win') {
+        // لاعب آخر فاز
+        this.handleWin(data.playerId);
+    }
+};
+
+// تعديل دالة بدء اللعبة
+ModernGame.prototype.startGame = function() {
+    if (!this.state.isHost) return;
+    
+    this.showScreen('game');
+    this.initializeRound();
+    
+    // إرسال إشارة البدء للجميع
+    if (this.localConnection) {
+        this.localConnection.sendGameData({
+            type: 'game-start',
+            round: this.state.gameData.currentRound,
+            timestamp: Date.now()
+        });
+    }
+    
+    this.playSound('start');
+    this.triggerHaptic('medium');
+};
+
+// تعديل دالة الفوز
+ModernGame.prototype.pressWinButton = function() {
+    if (this.state.gameData.roundWinner) return;
+    
+    this.triggerHaptic('heavy');
+    this.playSound('win');
+    this.launchConfetti();
+    
+    if (this.state.isHost) {
+        this.handleWin(this.state.playerId);
+    } else {
+        // إرسال للمضيف
+        if (this.localConnection) {
+            this.localConnection.sendGameData({
+                type: 'win',
+                playerId: this.state.playerId,
+                timestamp: Date.now()
+            }, 'host');
+        }
+    }
+};
+
+// إضافة دالة showJoinScreen
+ModernGame.prototype.showJoinScreen = function() {
+    const roomCode = prompt('أدخل رمز الغرفة:');
+    if (roomCode && roomCode.trim()) {
+        this.joinRoom(roomCode.trim().toUpperCase());
+    }
+};
