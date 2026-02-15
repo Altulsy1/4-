@@ -1232,3 +1232,56 @@ function shareApp() {
 document.addEventListener('DOMContentLoaded', () => {
     initializeGame();
 });
+// دوال اختيار الصعوبة
+function showDifficultyModal() {
+    const modal = document.getElementById('difficulty-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeDifficultyModal() {
+    const modal = document.getElementById('difficulty-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// تعديل دالة startSinglePlayer في الكلاس لفتح نافذة الصعوبة
+// (استبدل الدالة الموجودة)
+startSinglePlayer() {
+    showDifficultyModal();
+}
+
+// دالة جديدة لتعيين الصعوبة
+setDifficulty(level) {
+    this.aiDifficulty = level;
+    closeDifficultyModal();
+    this.startSinglePlayerWithAI();
+}
+
+// دالة بدء اللعب الفردي مع الذكاء الاصطناعي
+startSinglePlayerWithAI() {
+    this.gameMode = 'single';
+    this.state.isHost = true;
+    this.state.playerId = this.generatePlayerId();
+    
+    // إعادة تعيين لاعبي الذكاء الاصطناعي
+    this.aiPlayers = [];
+    
+    // إنشاء لاعبي الذكاء الاصطناعي (3 خصوم)
+    this.createAIPlayers(3);
+    
+    // الانتقال للعبة
+    this.showScreen('game');
+    this.initializeRound();
+    
+    this.showNotification(`🎮 وضع اللعب الفردي - مستوى ${this.getDifficultyName()}`, 'success');
+    this.playSound('start');
+}
+
+// الحصول على اسم مستوى الصعوبة
+getDifficultyName() {
+    const names = {
+        'easy': 'سهل',
+        'medium': 'متوسط',
+        'hard': 'صعب'
+    };
+    return names[this.aiDifficulty] || 'متوسط';
+}
