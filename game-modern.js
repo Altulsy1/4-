@@ -59,25 +59,28 @@ class ModernGame {
   }
 
   // ===== تهيئة Firebase =====
-  initializeFirebase() {
-    // التحقق من وجود Firebase SDK
-    if (typeof firebase === 'undefined') {
-      console.warn('⚠️ Firebase SDK غير موجود. سيتم تحميله...');
-      this.loadFirebaseSDK();
-      return;
-    }
+ // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyDeOQuQ2umGELjT8wNIw9vJr613Fxj1Dg0",
-      authDomain: "kin-tien.firebaseapp.com",
-      databaseURL: "https://kin-tien-default-rtdb.firebaseio.com",
-      projectId: "kin-tien",
-      storageBucket: "kin-tien.firebasestorage.app",
-      messagingSenderId: "285420896766",
-      appId: "1:285420896766:web:234ee65007d9333c1200af",
-      measurementId: "G-X8W7Y7Z72P"
-    };
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDeOQuQ2umGELjT8wNIw9vJr613Fxj1Dg0",
+  authDomain: "kin-tien.firebaseapp.com",
+  databaseURL: "https://kin-tien-default-rtdb.firebaseio.com",
+  projectId: "kin-tien",
+  storageBucket: "kin-tien.firebasestorage.app",
+  messagingSenderId: "285420896766",
+  appId: "1:285420896766:web:234ee65007d9333c1200af",
+  measurementId: "G-X8W7Y7Z72P"
+};
 
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
     try {
       // تهيئة Firebase إذا لم تكن مهيأة مسبقاً
       if (!firebase.apps.length) {
