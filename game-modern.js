@@ -1335,6 +1335,34 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('Init error:', e);
   }
 });
+// إضافة دوال للتحكم بالبطاقات
+shuffleMyCards() {
+    if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) return;
+    
+    const myCards = this.state.gameData.playersCards[this.state.playerId];
+    this.shuffleArray(myCards);
+    
+    this.displayMyCards(myCards);
+    this.showNotification('🔄 تم خلط البطاقات', 'success');
+    this.playSound('shuffle');
+}
+
+sortMyCards() {
+    if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) return;
+    
+    const myCards = this.state.gameData.playersCards[this.state.playerId];
+    
+    // ترتيب حسب الفاكهة
+    myCards.sort((a, b) => {
+        if (a.emoji < b.emoji) return -1;
+        if (a.emoji > b.emoji) return 1;
+        return 0;
+    });
+    
+    this.displayMyCards(myCards);
+    this.showNotification('📊 تم ترتيب البطاقات', 'success');
+    this.playSound('sort');
+}
 
 // تقليل السلوك الافتراضي المزعج على الجوال (اختياري)
 document.addEventListener('contextmenu', (e) => e.preventDefault());
