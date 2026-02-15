@@ -1,10 +1,10 @@
-// game-modern.js - نسخة مصححة ومحسنة
+// game-modern.js - نسخة محسنة ومصححة بالكامل
 
 class ModernGame {
     constructor() {
         this.state = {
-            playerId: null,
-            playerName: localStorage.getItem('playerName') || 'لاعب',
+            playerId: this.generatePlayerId(),
+            playerName: localStorage.getItem('fruitClash_playerName') || 'لاعب',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${Date.now()}`,
             isHost: false,
             roomId: null,
@@ -14,24 +14,33 @@ class ModernGame {
                 roundWinner: null,
                 playersCards: {},
                 gameActive: false,
-                startTime: null
+                startTime: null,
+                maxPlayers: 4,
+                roundTime: 60,
+                fruits: ['🍎', '🍌', '🍊', '🍇', '🍓', '🍉', '🍒', '🍍']
             },
             stats: null,
-            unsubscribeFunctions: []
+            unsubscribeFunctions: [],
+            connectionStatus: 'offline'
         };
 
         this.timerInterval = null;
-        // استخدم Firebase فقط إذا كانت المكتبة محمّلة فعلاً
-        this.useFirebase = (typeof firebase !== 'undefined');
-        this.db = null;
-        this.rtdb = null;
-
+        this.fruitsNames = {
+            '🍎': 'تفاح', '🍌': 'موز', '🍊': 'برتقال',
+            '🍇': 'عنب', '🍓': 'فراولة', '🍉': 'بطيخ',
+            '🍒': 'كرز', '🍍': 'أناناس'
+        };
+        
         this.init();
     }
 
-    // مساعدة للوصول الآمن لعناصر DOM
-    getEl(id) {
-        return document.getElementById(id) || null;
+    // دالة مساعدة للوصول الآمن لعناصر DOM
+    getElement(id) {
+        return document.getElementById(id);
+    }
+
+    generatePlayerId() {
+        return 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
 
     async init() {
@@ -40,326 +49,78 @@ class ModernGame {
         this.updatePlayerDisplay();
         this.startBackgroundAnimation();
         this.simulateOnlineCount();
-
-        if (this.useFirebase) {
-            await this.initFirebase();
-        } else {
-            // محلياً: محاكاة لاعبين بعد تحميل الواجهة
-            this.simulatePlayers();
-        }
+        this.checkUrlForJoin();
     }
 
-    // تهيئة Firebase (آمنة)
-    async initFirebase() {
-        try {
-            const firebaseConfig = {
-                apiKey: "AIzaSyDeOQuQ2umGELjT8wNIw9vJr613Fxj1Dg0",
-                authDomain: "kin-tien.firebaseapp.com",
-                projectId: "kin-tien",
-                storageBucket: "kin-tien.firebasestorage.app",
-                messagingSenderId: "285420896766",
-                appId: "1:285420896766:web:234ee65007d9333c1200af",
-                measurementId: "G-X8W7Y7Z72P"
-            };
-
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
-
-            this.db = firebase.firestore();
-            this.rtdb = firebase.database();
-            console.log('✅ Firebase initialized');
-
-        } catch (error) {
-            console.warn('⚠️ Firebase غير متاح، استخدام الوضع المحلي', error);
-            this.useFirebase = false;
-            this.db = null;
-            this.rtdb = null;
-            this.simulatePlayers();
+    checkUrlForJoin() {
+        const params = new URLSearchParams(window.location.search);
+        const joinCode = params.get('join');
+        if (joinCode) {
+            setTimeout(() => {
+                this.joinRoom(joinCode.toUpperCase());
+            }, 1000);
         }
     }
 
     setupEventListeners() {
-        const createBtn = this.getEl('create-room-btn');
-        createBtn?.addEventListener('click', () => this.createRoom());
+        // أزرار القائمة الرئيسية
+        this.getElement('create-room-btn')?.addEventListener('click', () => this.createRoom());
+        this.getElement('join-room-btn')?.addEventListener('click', () => this.showJoinDialog());
+        this.getElement('single-player-btn')?.addEventListener('click', () => this.startSinglePlayer());
+        this.getElement('edit-name-btn')?.addEventListener('click', () => this.changePlayerName());
 
-        const joinBtn = this.getEl('join-room-btn');
-        joinBtn?.addEventListener('click', () => this.showJoinScreen());
+        // أزرار اللعبة
+        this.getElement('start-game-btn')?.addEventListener('click', () => this.startGame());
+        this.getElement('done-button')?.addEventListener('click', () => this.claimWin());
+        this.getElement('next-round-btn')?.addEventListener('click', () => this.nextRound());
+        this.getElement('end-game-btn')?.addEventListener('click', () => this.endGame());
 
-        const singleBtn = this.getEl('single-player-btn');
-        singleBtn?.addEventListener('click', () => this.startSinglePlayer());
-
-        const editBtn = this.getEl('edit-name-btn');
-        editBtn?.addEventListener('click', () => this.changeName());
-
-        const startBtn = this.getEl('start-game-btn') || document.querySelector('.start-btn');
-        startBtn?.addEventListener('click', () => this.startGame());
-
-        const doneBtn = this.getEl('done-button');
-        doneBtn?.addEventListener('click', () => this.pressWinButton());
-
-        const nextRoundBtn = this.getEl('next-round-btn');
-        nextRoundBtn?.addEventListener('click', () => {
-            const modal = this.getEl('result-modal');
-            if (modal) modal.classList.add('hidden');
-            this.initializeRound();
-        });
-
-        const endGameBtn = this.getEl('end-game-btn');
-        endGameBtn?.addEventListener('click', () => {
-            const modal = this.getEl('result-modal');
-            if (modal) modal.classList.add('hidden');
-            this.showScreen('main-menu');
-        });
-
-        document.querySelectorAll('.invite-btn').forEach(btn => {
+        // أزرار المشاركة
+        document.querySelectorAll('.invite-btn, .share-btn').forEach(btn => {
             btn.addEventListener('click', () => this.shareInvite());
         });
     }
 
-    // تحديث عرض اللاعب (آمن)
     updatePlayerDisplay() {
-        const nameDisplay = this.getEl('player-name-display');
-        if (nameDisplay) nameDisplay.textContent = this.state.playerName;
+        const nameElements = ['player-name-display', 'menu-player-name', 'side-player-name'];
+        nameElements.forEach(id => {
+            const el = this.getElement(id);
+            if (el) el.textContent = this.state.playerName;
+        });
 
-        const menuName = this.getEl('menu-player-name');
-        if (menuName) menuName.textContent = this.state.playerName;
-
-        const avatars = document.querySelectorAll('.player-avatar img');
-        avatars.forEach(img => {
+        const avatarElements = document.querySelectorAll('.player-avatar img, #side-avatar, #menu-avatar');
+        avatarElements.forEach(img => {
             if (img) img.src = this.state.avatar;
         });
     }
 
-    changeName() {
+    changePlayerName() {
         const newName = prompt('أدخل اسمك الجديد', this.state.playerName);
         if (newName && newName.trim()) {
             this.state.playerName = newName.trim();
-            localStorage.setItem('playerName', this.state.playerName);
-            // تجديد الصورة الرمزية
-            this.state.avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${Date.now()}`;
+            localStorage.setItem('fruitClash_playerName', this.state.playerName);
             this.updatePlayerDisplay();
-            this.showToast('تم تحديث الاسم بنجاح', 'success');
+            this.showNotification('✅ تم تحديث الاسم', 'success');
         }
     }
 
     async createRoom() {
         this.state.isHost = true;
-        this.state.playerId = 'host_' + Date.now();
-        this.generateRoomCode();
+        this.state.playerId = this.generatePlayerId();
+        this.state.roomId = this.generateRoomCode();
+        
+        // إضافة المضيف إلى قائمة اللاعبين
+        this.state.players[this.state.playerId] = {
+            name: this.state.playerName,
+            avatar: this.state.avatar,
+            isHost: true,
+            joinedAt: new Date().toISOString()
+        };
 
-        if (this.useFirebase && this.db) {
-            await this.createRoomWithFirebase();
-        } else {
-            await this.createRoomLocally();
-        }
-    }
-
-    async createRoomWithFirebase() {
-        try {
-            await this.db.collection('rooms').doc(this.state.roomId).set({
-                hostId: this.state.playerId,
-                hostName: this.state.playerName,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                status: 'waiting',
-                players: {
-                    [this.state.playerId]: {
-                        name: this.state.playerName,
-                        avatar: this.state.avatar,
-                        isHost: true,
-                        joinedAt: new Date().toISOString()
-                    }
-                },
-                playerCount: 1,
-                maxPlayers: 4,
-                gameState: null
-            });
-
-            this.listenToRoomChanges();
-            this.showScreen('lobby');
-            this.updateLobbyDisplay();
-            this.generateQRCode();
-            this.showToast('✅ تم إنشاء الغرفة بنجاح', 'success');
-
-        } catch (error) {
-            console.error('خطأ في إنشاء الغرفة:', error);
-            this.showToast('❌ فشل إنشاء الغرفة', 'error');
-        }
-    }
-
-    async createRoomLocally() {
-        try {
-            this.showScreen('lobby');
-            this.updateLobbyDisplay();
-            this.generateQRCode();
-            this.showToast('تم إنشاء الغرفة محلياً', 'success');
-
-            // محاكاة انضمام لاعبين محلياً
-            this.simulatePlayers();
-
-        } catch (error) {
-            console.error('فشل إنشاء الغرفة:', error);
-            this.showToast('فشل الاتصال', 'error');
-        }
-    }
-
-    listenToRoomChanges() {
-        if (!this.db || !this.state.roomId) return;
-
-        const unsubscribe = this.db.collection('rooms')
-            .doc(this.state.roomId)
-            .onSnapshot((doc) => {
-                if (doc.exists) {
-                    const roomData = doc.data();
-                    this.state.players = roomData.players || {};
-                    this.updatePlayersList(roomData.players || {});
-
-                    if (roomData.status === 'playing' && !this.state.gameData.gameActive) {
-                        this.startGameFromFirebase(roomData.gameState);
-                    }
-                }
-            });
-
-        if (typeof unsubscribe === 'function') {
-            this.state.unsubscribeFunctions.push(unsubscribe);
-        }
-    }
-
-    updatePlayersList(players) {
-        const playersGrid = this.getEl('players-grid');
-        if (!playersGrid) return;
-
-        playersGrid.innerHTML = '';
-        const playersArray = Object.entries(players || {}).map(([id, data]) => ({ id, ...data }));
-
-        const hostPlayer = playersArray.find(p => p.isHost);
-        if (hostPlayer) {
-            this.addPlayerCard(playersGrid, hostPlayer, true);
-        }
-
-        playersArray.filter(p => !p.isHost).forEach(player => {
-            this.addPlayerCard(playersGrid, player, false);
-        });
-
-        for (let i = playersArray.length; i < 4; i++) {
-            this.addEmptyCard(playersGrid);
-        }
-
-        this.updateStartButton(playersArray.length);
-    }
-
-    addPlayerCard(container, player, isHost) {
-        const card = document.createElement('div');
-        card.className = `player-card ${isHost ? 'host-card' : ''}`;
-        card.innerHTML = `
-            <div class="player-avatar large">
-                <img src="${player.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + player.id}" alt="">
-            </div>
-            <div class="player-name">${player.name}</div>
-            ${isHost ? '<div class="player-badge host-badge">المضيف</div>' : ''}
-        `;
-        container.appendChild(card);
-    }
-
-    addEmptyCard(container) {
-        const card = document.createElement('div');
-        card.className = 'player-card empty-card';
-        card.innerHTML = `
-            <div class="empty-icon">👤</div>
-            <div class="empty-text">انتظار...</div>
-        `;
-        container.appendChild(card);
-    }
-
-    updateStartButton(playerCount) {
-        const startBtn = this.getEl('start-game-btn') || document.querySelector('.start-btn');
-        const countElement = this.getEl('player-count');
-
-        if (countElement) {
-            countElement.textContent = `${playerCount}/4`;
-        }
-
-        if (startBtn) {
-            if (this.state.isHost && playerCount >= 2) {
-                startBtn.classList.remove('disabled');
-                startBtn.disabled = false;
-            } else {
-                startBtn.classList.add('disabled');
-                startBtn.disabled = true;
-            }
-        }
-    }
-
-    simulatePlayers() {
-        // شغّل المحاكاة فقط إذا لا يوجد اتصال فعلي بقاعدة بيانات
-        if (!this.db) {
-            setTimeout(() => {
-                const mockPlayers = {
-                    ...this.state.players,
-                    'player2': {
-                        name: 'Player 2',
-                        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=player2',
-                        isHost: false
-                    }
-                };
-                this.state.players = mockPlayers;
-                this.updatePlayersList(mockPlayers);
-            }, 1000);
-        }
-    }
-
-    showJoinScreen() {
-        const roomCode = prompt('أدخل رمز الغرفة:');
-        if (roomCode && roomCode.trim()) {
-            this.joinRoom(roomCode.trim().toUpperCase());
-        }
-    }
-
-    async joinRoom(roomCode) {
-        this.state.roomId = roomCode;
-        this.state.playerId = 'player_' + Date.now();
-
-        if (this.useFirebase && this.db) {
-            await this.joinRoomWithFirebase(roomCode);
-        } else {
-            this.showToast('الانضمام متاح فقط مع Firebase', 'error');
-        }
-    }
-
-    async joinRoomWithFirebase(roomCode) {
-        try {
-            const roomDoc = await this.db.collection('rooms').doc(roomCode).get();
-
-            if (!roomDoc.exists) {
-                this.showToast('❌ الغرفة غير موجودة', 'error');
-                return;
-            }
-
-            const roomData = roomDoc.data();
-
-            if (roomData.playerCount >= roomData.maxPlayers) {
-                this.showToast('❌ الغرفة ممتلئة', 'error');
-                return;
-            }
-
-            await this.db.collection('rooms').doc(roomCode).update({
-                [`players.${this.state.playerId}`]: {
-                    name: this.state.playerName,
-                    avatar: this.state.avatar,
-                    isHost: false,
-                    joinedAt: new Date().toISOString()
-                },
-                playerCount: roomData.playerCount + 1
-            });
-
-            this.listenToRoomChanges();
-            this.showScreen('lobby');
-            this.showToast('✅ تم الانضمام للغرفة', 'success');
-
-        } catch (error) {
-            console.error('خطأ في الانضمام:', error);
-            this.showToast('❌ فشل الانضمام', 'error');
-        }
+        this.showScreen('lobby');
+        this.updateLobbyDisplay();
+        this.generateQRCode();
+        this.showNotification('✅ تم إنشاء الغرفة بنجاح', 'success');
     }
 
     generateRoomCode() {
@@ -368,107 +129,244 @@ class ModernGame {
         for (let i = 0; i < 4; i++) {
             code += chars[Math.floor(Math.random() * chars.length)];
         }
-        this.state.roomId = code;
-        const codeElement = this.getEl('room-code');
+        const codeElement = this.getElement('room-code');
         if (codeElement) codeElement.textContent = code;
         return code;
     }
 
+    showJoinDialog() {
+        const roomCode = prompt('أدخل رمز الغرفة المكون من 4 أحرف أو أرقام:');
+        if (roomCode && roomCode.trim()) {
+            this.joinRoom(roomCode.trim().toUpperCase());
+        }
+    }
+
+    async joinRoom(roomCode) {
+        this.state.roomId = roomCode;
+        this.state.playerId = this.generatePlayerId();
+        this.state.isHost = false;
+
+        // محاكاة انضمام للغرفة
+        this.state.players[this.state.playerId] = {
+            name: this.state.playerName,
+            avatar: this.state.avatar,
+            isHost: false,
+            joinedAt: new Date().toISOString()
+        };
+
+        // محاكاة وجود مضيف
+        if (!Object.values(this.state.players).some(p => p.isHost)) {
+            this.state.players['host_' + Date.now()] = {
+                name: 'مضيف',
+                avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=host',
+                isHost: true,
+                joinedAt: new Date().toISOString()
+            };
+        }
+
+        this.showScreen('lobby');
+        this.updateLobbyDisplay();
+        this.showNotification('✅ تم الانضمام للغرفة', 'success');
+    }
+
+    updateLobbyDisplay() {
+        this.updatePlayersList();
+        this.updateRoomCode();
+    }
+
+    updateRoomCode() {
+        const codeElement = this.getElement('room-code');
+        if (codeElement) codeElement.textContent = this.state.roomId || '----';
+    }
+
+    updatePlayersList() {
+        const playersGrid = this.getElement('players-grid');
+        if (!playersGrid) return;
+
+        playersGrid.innerHTML = '';
+        const playersArray = Object.entries(this.state.players).map(([id, data]) => ({ id, ...data }));
+
+        // عرض المضيف أولاً
+        const hostPlayer = playersArray.find(p => p.isHost);
+        if (hostPlayer) {
+            playersGrid.appendChild(this.createPlayerCard(hostPlayer, true));
+        }
+
+        // عرض باقي اللاعبين
+        playersArray.filter(p => !p.isHost).forEach(player => {
+            playersGrid.appendChild(this.createPlayerCard(player, false));
+        });
+
+        // إضافة أماكن فارغة
+        for (let i = playersArray.length; i < this.state.gameData.maxPlayers; i++) {
+            playersGrid.appendChild(this.createEmptyPlayerCard());
+        }
+
+        // تحديث عداد اللاعبين وزر البدء
+        this.updatePlayerCount(playersArray.length);
+        this.updateStartButton(playersArray.length);
+    }
+
+    createPlayerCard(player, isHost) {
+        const card = document.createElement('div');
+        card.className = `player-card ${isHost ? 'host-card' : ''}`;
+        card.innerHTML = `
+            <div class="player-avatar large">
+                <img src="${player.avatar}" alt="${player.name}" loading="lazy">
+            </div>
+            <div class="player-name">${player.name}</div>
+            ${isHost ? '<div class="player-badge host-badge">المضيف</div>' : ''}
+        `;
+        return card;
+    }
+
+    createEmptyPlayerCard() {
+        const card = document.createElement('div');
+        card.className = 'player-card empty-card';
+        card.innerHTML = `
+            <div class="empty-icon">👤</div>
+            <div class="empty-text">انتظار...</div>
+        `;
+        return card;
+    }
+
+    updatePlayerCount(count) {
+        const countElement = this.getElement('player-count');
+        if (countElement) {
+            countElement.textContent = `${count}/${this.state.gameData.maxPlayers}`;
+        }
+    }
+
+    updateStartButton(playerCount) {
+        const startBtn = this.getElement('start-game-btn');
+        if (!startBtn) return;
+
+        if (this.state.isHost && playerCount >= 2) {
+            startBtn.classList.remove('disabled');
+            startBtn.disabled = false;
+            startBtn.textContent = '🚀 ابدأ اللعبة';
+        } else if (this.state.isHost) {
+            startBtn.classList.add('disabled');
+            startBtn.disabled = true;
+            startBtn.textContent = '⏳ انتظار المزيد من اللاعبين';
+        } else {
+            startBtn.classList.add('disabled');
+            startBtn.disabled = true;
+            startBtn.textContent = '⏳ انتظار المضيف';
+        }
+    }
+
     generateQRCode() {
         if (!this.state.roomId) return;
+        
         const roomUrl = `${window.location.origin}${window.location.pathname}?join=${this.state.roomId}`;
-        const canvas = this.getEl('qr-code');
+        const canvas = this.getElement('qr-code');
+        const container = this.getElement('qr-code-container');
 
-        if (canvas && typeof QRCode !== 'undefined') {
-            QRCode.toCanvas(canvas, roomUrl, {
-                width: 150,
-                margin: 1,
-                color: { dark: '#6C5CE7', light: '#FFFFFF' }
-            }, (error) => {
-                if (error) {
-                    console.error('QR Error:', error);
-                    this.showQRFallback();
-                }
-            });
-        } else {
-            this.showQRFallback();
-        }
-    }
+        if (!canvas || !container) return;
 
-    showQRFallback() {
-        const container = this.getEl('qr-code-container');
-        if (container) {
-            container.innerHTML = `
-                <div style="padding: 20px; background: #F0F0F0; border-radius: 15px;">
-                    <i class="fas fa-link" style="font-size: 2rem; color: #6C5CE7;"></i>
-                    <p style="margin-top: 10px;">الرمز: ${this.state.roomId}</p>
-                </div>
-            `;
-        }
-    }
-
-    startGame() {
-        if (!this.state.isHost) return;
-
-        this.showScreen('game');
-        this.initializeRound();
-
-        if (this.useFirebase && this.db && this.state.roomId) {
+        if (typeof QRCode !== 'undefined') {
             try {
-                this.db.collection('rooms').doc(this.state.roomId).update({
-                    status: 'playing',
-                    gameState: {
-                        currentRound: this.state.gameData.currentRound,
-                        startTime: Date.now()
+                QRCode.toCanvas(canvas, roomUrl, {
+                    width: 150,
+                    margin: 1,
+                    color: { dark: '#6C5CE7', light: '#FFFFFF' }
+                }, (error) => {
+                    if (error) {
+                        console.warn('خطأ في إنشاء QR:', error);
+                        this.showQRFallback(roomUrl);
                     }
                 });
             } catch (e) {
-                console.warn('تعذر تحديث حالة الغرفة في Firebase', e);
+                this.showQRFallback(roomUrl);
             }
+        } else {
+            this.showQRFallback(roomUrl);
+        }
+    }
+
+    showQRFallback(roomUrl) {
+        const container = this.getElement('qr-code-container');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="qr-fallback">
+                <i class="fas fa-link"></i>
+                <p>رمز الغرفة: ${this.state.roomId}</p>
+                <button onclick="navigator.clipboard.writeText('${roomUrl}')">
+                    نسخ الرابط
+                </button>
+            </div>
+        `;
+    }
+
+    startGame() {
+        if (!this.state.isHost) {
+            this.showNotification('❌ فقط المضيف يمكنه بدء اللعبة', 'error');
+            return;
         }
 
+        const playerCount = Object.keys(this.state.players).length;
+        if (playerCount < 2) {
+            this.showNotification('❌ تحتاج على الأقل لاعبين للبدء', 'error');
+            return;
+        }
+
+        this.showScreen('game');
+        this.initializeRound();
         this.playSound('start');
         this.triggerHaptic('medium');
+        this.showNotification('🎮 بدأت اللعبة!', 'success');
     }
 
     initializeRound() {
         this.state.gameData.gameActive = true;
         this.state.gameData.roundWinner = null;
-        // استخدم طابع زمني واحد لتوليد معرفات البطاقات
+        this.state.gameData.currentRound = 1;
+        this.state.gameData.startTime = Date.now();
+        
         this.dealCards();
-        this.startTimer(60);
+        this.startTimer(this.state.gameData.roundTime);
         this.updateGameUI();
     }
 
     dealCards() {
-        const fruits = ['🍎', '🍌', '🍊', '🍇', '🍓', '🍉', '🍒', '🍍'];
         const allCards = [];
-        const baseTs = Date.now();
+        const timestamp = Date.now();
 
+        // إنشاء 16 بطاقة
         for (let i = 0; i < 16; i++) {
-            const fruitIndex = Math.floor(Math.random() * fruits.length);
+            const fruitIndex = Math.floor(Math.random() * this.state.gameData.fruits.length);
+            const emoji = this.state.gameData.fruits[fruitIndex];
             allCards.push({
-                id: `card-${i}-${baseTs}`,
-                emoji: fruits[fruitIndex],
-                name: this.getFruitName(fruits[fruitIndex]),
+                id: `card-${i}-${timestamp}`,
+                emoji: emoji,
+                name: this.fruitsNames[emoji] || 'فاكهة',
                 fruitId: fruitIndex
             });
         }
 
-        // players: المضيف أولاً ثم باقي اللاعبين من الحالة
-        const players = [this.state.playerId, ...Object.keys(this.state.players || {})].filter(Boolean);
-        players.forEach((playerId, index) => {
-            const playerCards = allCards.slice(index * 4, (index + 1) * 4) || [];
+        // توزيع البطاقات على اللاعبين (4 بطاقات لكل لاعب)
+        const playerIds = [this.state.playerId, ...Object.keys(this.state.players).filter(id => id !== this.state.playerId)];
+        
+        playerIds.forEach((playerId, index) => {
+            const startIdx = index * 4;
+            const endIdx = startIdx + 4;
+            const playerCards = allCards.slice(startIdx, endIdx);
+            
             this.state.gameData.playersCards[playerId] = playerCards;
 
             if (playerId === this.state.playerId) {
                 this.displayMyCards(playerCards);
             }
         });
+
+        // عرض تقدم اللاعبين الآخرين
+        this.displayPlayersProgress();
     }
 
     displayMyCards(cards) {
-        const container = this.getEl('cards-container');
+        const container = this.getElement('cards-container');
         if (!container) return;
 
         container.innerHTML = '';
@@ -481,133 +379,170 @@ class ModernGame {
                 <div class="card-emoji">${card.emoji}</div>
                 <div class="card-name">${card.name}</div>
             `;
-
-            cardEl.addEventListener('click', () => this.selectCard(card));
+            cardEl.addEventListener('click', () => this.onCardClick(card));
             container.appendChild(cardEl);
         });
 
-        const countEl = this.getEl('cards-count');
-        if (countEl) countEl.textContent = `${cards.length}/4`;
-        this.checkWinCondition(cards);
+        this.updateCardsCount(cards.length);
+        this.checkForFourOfAKind(cards);
     }
 
-    selectCard(card) {
-        this.showToast(`${card.name}`, 'info');
+    onCardClick(card) {
+        this.showNotification(`${card.name}`, 'info');
+        this.triggerHaptic('light');
     }
 
-    checkWinCondition(cards) {
+    updateCardsCount(count) {
+        const countEl = this.getElement('cards-count');
+        if (countEl) countEl.textContent = `${count}/4`;
+    }
+
+    checkForFourOfAKind(cards) {
         const counts = {};
         cards.forEach(card => {
             counts[card.emoji] = (counts[card.emoji] || 0) + 1;
         });
 
         const hasFour = Object.values(counts).some(count => count >= 4);
-        const winBtn = this.getEl('done-button');
+        const winButton = this.getElement('done-button');
 
-        if (winBtn && hasFour) {
-            winBtn.classList.remove('disabled');
-            winBtn.disabled = false;
-            this.animateWinButton();
-            this.showToast('لديك 4 من نفس النوع!', 'success');
-        }
-    }
-
-    pressWinButton() {
-        if (this.state.gameData.roundWinner) return;
-
-        this.triggerHaptic('heavy');
-        this.launchConfetti();
-
-        if (this.state.isHost) {
-            this.handleWin(this.state.playerId);
-        } else {
-            // في وضع متعدد اللاعبين مع Firebase، يمكن إرسال حدث للفائز
-            if (this.useFirebase && this.db && this.state.roomId) {
-                try {
-                    this.db.collection('rooms').doc(this.state.roomId).update({
-                        'gameState.lastClaim': {
-                            playerId: this.state.playerId,
-                            time: Date.now()
-                        }
-                    });
-                } catch (e) {
-                    console.warn('تعذر إرسال مطالبة الفوز', e);
-                }
+        if (winButton) {
+            if (hasFour) {
+                winButton.classList.remove('disabled');
+                winButton.disabled = false;
+                this.animateWinButton();
+                this.showNotification('🎉 لديك 4 بطاقات متطابقة! اضغط للفوز', 'success');
+            } else {
+                winButton.classList.add('disabled');
+                winButton.disabled = true;
             }
         }
     }
 
+    displayPlayersProgress() {
+        const container = this.getElement('players-progress');
+        if (!container) return;
+
+        container.innerHTML = '';
+        
+        Object.entries(this.state.gameData.playersCards).forEach(([playerId, cards]) => {
+            const playerInfo = this.state.players[playerId] || { name: 'خصم', avatar: this.state.avatar };
+            const progress = this.calculatePlayerProgress(cards);
+            
+            const progressEl = document.createElement('div');
+            progressEl.className = `player-progress-item ${playerId === this.state.gameData.roundWinner ? 'winner' : ''}`;
+            progressEl.innerHTML = `
+                <div class="progress-avatar">
+                    <img src="${playerInfo.avatar}" alt="${playerInfo.name}">
+                </div>
+                <div class="progress-name">${playerInfo.name}</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: ${progress}%"></div>
+                </div>
+                <div class="progress-count">${this.getMaxSameCards(cards)}/4</div>
+            `;
+            
+            container.appendChild(progressEl);
+        });
+    }
+
+    calculatePlayerProgress(cards) {
+        const maxSame = this.getMaxSameCards(cards);
+        return (maxSame / 4) * 100;
+    }
+
+    getMaxSameCards(cards) {
+        const counts = {};
+        cards.forEach(card => {
+            counts[card.emoji] = (counts[card.emoji] || 0) + 1;
+        });
+        return Math.max(...Object.values(counts), 0);
+    }
+
+    claimWin() {
+        if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) {
+            return;
+        }
+
+        this.triggerHaptic('heavy');
+        this.launchConfetti();
+        this.handleWin(this.state.playerId);
+    }
+
     handleWin(playerId) {
-        if (!playerId) return;
         this.state.gameData.roundWinner = playerId;
         this.state.gameData.gameActive = false;
         this.stopTimer();
 
-        const winTime = Math.floor((Date.now() - (this.state.gameData.startTime || Date.now())) / 1000);
-
+        const winTime = Math.floor((Date.now() - this.state.gameData.startTime) / 1000);
+        
         if (playerId === this.state.playerId) {
             this.updateStats('win', winTime);
         }
 
-        this.showWinner(playerId, winTime);
+        this.showWinnerModal(playerId, winTime);
+        this.playSound('win');
     }
 
-    showWinner(playerId, time) {
-        const winnerName = playerId === this.state.playerId ?
-            this.state.playerName :
-            (this.state.players[playerId]?.name || 'الخصم');
+    showWinnerModal(playerId, winTime) {
+        const isMe = playerId === this.state.playerId;
+        const winnerName = isMe ? this.state.playerName : (this.state.players[playerId]?.name || 'الخصم');
+        
+        const titleEl = this.getElement('result-title');
+        const messageEl = this.getElement('result-message');
+        const timeEl = this.getElement('round-time');
+        const streakEl = this.getElement('win-streak');
 
-        const titleEl = this.getEl('result-title');
-        if (titleEl) titleEl.textContent = `🎉 ${winnerName} فاز!`;
+        if (titleEl) titleEl.textContent = isMe ? '🎉 أنت الفائز!' : `🎉 ${winnerName} فاز!`;
+        if (messageEl) messageEl.textContent = `جمع 4 بطاقات في ${winTime} ثانية`;
+        if (timeEl) timeEl.textContent = `${winTime}s`;
+        if (streakEl) streakEl.textContent = this.state.stats?.winStreak || '0';
 
-        const msgEl = this.getEl('result-message');
-        if (msgEl) msgEl.textContent = `جمع 4 بطاقات في ${time} ثانية`;
-
-        const roundTimeEl = this.getEl('round-time');
-        if (roundTimeEl) roundTimeEl.textContent = `${time}s`;
-
-        const streakEl = this.getEl('win-streak');
-        if (streakEl) streakEl.textContent = this.state.stats.winStreak || 0;
-
-        const modal = this.getEl('result-modal');
+        const modal = this.getElement('result-modal');
         if (modal) modal.classList.remove('hidden');
 
         this.launchConfetti();
+        if (isMe) this.triggerHaptic('success');
+    }
 
-        if (playerId === this.state.playerId) {
-            this.triggerHaptic('success');
-        }
+    nextRound() {
+        const modal = this.getElement('result-modal');
+        if (modal) modal.classList.add('hidden');
+
+        this.state.gameData.currentRound++;
+        this.initializeRound();
+    }
+
+    endGame() {
+        const modal = this.getElement('result-modal');
+        if (modal) modal.classList.add('hidden');
+
+        this.leaveRoom();
     }
 
     startTimer(seconds) {
-        this.state.gameData.startTime = Date.now();
         let timeLeft = seconds;
-        const total = 283; // قيمة stroke-dasharray في CSS
+        const totalDash = 283; // قيمة stroke-dasharray
+        const timerProgress = this.getElement('timer-progress');
+        const gameTimer = this.getElement('game-timer');
+        const roundNumber = this.getElement('round-number');
 
-        // تنظيف أي مؤقت سابق
         this.stopTimer();
 
-        // تحديث فوري للعرض
-        const timerProgress = this.getEl('timer-progress');
-        const gameTimer = this.getEl('game-timer');
-        if (gameTimer) gameTimer.textContent = timeLeft;
+        if (roundNumber) roundNumber.textContent = this.state.gameData.currentRound;
 
         this.timerInterval = setInterval(() => {
-            // تحقق قبل النقصان لتجنب عرض أرقام سالبة
-            if (timeLeft <= 0) {
-                this.endRound();
-                return;
+            timeLeft--;
+            
+            if (gameTimer) gameTimer.textContent = timeLeft;
+            
+            if (timerProgress) {
+                const progress = totalDash * (timeLeft / seconds);
+                timerProgress.style.strokeDashoffset = totalDash - progress;
             }
 
-            timeLeft--;
-
-            const progress = total * (timeLeft / seconds);
-            if (timerProgress) timerProgress.style.strokeDashoffset = total - progress;
-            if (gameTimer) gameTimer.textContent = timeLeft;
-
             if (timeLeft <= 10) {
-                const timerText = document.querySelector('.timer-text');
-                if (timerText) timerText.style.color = '#FF7675';
+                document.querySelector('.timer-text')?.classList.add('urgent');
             }
 
             if (timeLeft <= 0) {
@@ -627,17 +562,12 @@ class ModernGame {
         this.stopTimer();
         this.state.gameData.gameActive = false;
 
+        // تحديد اللاعب صاحب أكبر عدد من البطاقات المتطابقة
         let maxCount = 0;
         let winner = null;
 
-        Object.entries(this.state.gameData.playersCards || {}).forEach(([playerId, cards]) => {
-            const counts = {};
-            (cards || []).forEach(card => {
-                counts[card.emoji] = (counts[card.emoji] || 0) + 1;
-            });
-            const values = Object.values(counts);
-            const playerMax = values.length ? Math.max(...values) : 0;
-
+        Object.entries(this.state.gameData.playersCards).forEach(([playerId, cards]) => {
+            const playerMax = this.getMaxSameCards(cards);
             if (playerMax > maxCount) {
                 maxCount = playerMax;
                 winner = playerId;
@@ -647,19 +577,13 @@ class ModernGame {
         if (winner) {
             this.handleWin(winner);
         } else {
-            // لا فائز واضح: عرض نتيجة تعادل أو انتهاء الوقت
-            this.showToast('انتهى الوقت! لم يتم جمع 4 بطاقات', 'info');
-            const modal = this.getEl('result-modal');
-            if (modal) modal.classList.remove('hidden');
-            const titleEl = this.getEl('result-title');
-            if (titleEl) titleEl.textContent = '⏱️ انتهى الوقت';
-            const msgEl = this.getEl('result-message');
-            if (msgEl) msgEl.textContent = 'لم يتم جمع 4 بطاقات من أي لاعب';
+            this.showNotification('⏱️ انتهى الوقت! لا فائز', 'info');
+            this.showWinnerModal(null, this.state.gameData.roundTime);
         }
     }
 
     animateWinButton() {
-        const btn = this.getEl('done-button');
+        const btn = this.getElement('done-button');
         if (btn) {
             btn.style.animation = 'pulse 0.5s infinite';
             setTimeout(() => {
@@ -676,6 +600,9 @@ class ModernGame {
                 origin: { y: 0.6 },
                 colors: ['#6C5CE7', '#00D2FF', '#FF7675', '#FDCB6E']
             });
+        } else {
+            // محاكاة confetti إذا لم تكن المكتبة محملة
+            console.log('🎊 تهانينا!');
         }
     }
 
@@ -689,28 +616,38 @@ class ModernGame {
             success: [100, 50, 200]
         };
 
-        window.navigator.vibrate(patterns[intensity] || patterns.light);
+        try {
+            window.navigator.vibrate(patterns[intensity] || patterns.light);
+        } catch (e) {
+            // تجاهل أخطاء الاهتزاز
+        }
     }
 
     playSound(type) {
-        // ربط أصوات فعلية لاحقاً
-        console.log('Sound:', type);
+        // يمكن إضافة أصوات لاحقاً
+        console.log(`🔊 تشغيل صوت: ${type}`);
     }
 
-    showToast(message, type = 'info') {
+    showNotification(message, type = 'info') {
         const toast = document.createElement('div');
         toast.className = `toast-message toast-${type}`;
+        
+        const icons = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            info: 'fa-info-circle',
+            warning: 'fa-exclamation-triangle'
+        };
+
         toast.innerHTML = `
-            <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+            <i class="fas ${icons[type] || icons.info}"></i>
             <span>${message}</span>
         `;
 
         document.body.appendChild(toast);
 
-        setTimeout(() => {
-            toast.classList.add('show');
-        }, 10);
-
+        // تشغيل الأنيميشن
+        setTimeout(() => toast.classList.add('show'), 10);
         setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
@@ -718,181 +655,198 @@ class ModernGame {
     }
 
     shareInvite() {
-        if (!this.state.roomId) return;
+        if (!this.state.roomId) {
+            this.showNotification('❌ لا توجد غرفة نشطة', 'error');
+            return;
+        }
 
         const roomUrl = `${window.location.origin}${window.location.pathname}?join=${this.state.roomId}`;
+        const shareText = `تعال العب معي Fruit Clash! رمز الغرفة: ${this.state.roomId}`;
 
         if (navigator.share) {
             navigator.share({
-                title: 'انضم إلى لعبة Fruit Clash',
-                text: 'تعال العب معي لعبة الفواكه الأربعة',
+                title: 'دعوة للعبة Fruit Clash',
+                text: shareText,
                 url: roomUrl
+            }).catch(() => {
+                this.copyToClipboard(roomUrl);
             });
         } else {
-            navigator.clipboard.writeText(roomUrl);
-            this.showToast('تم نسخ رابط الدعوة', 'success');
+            this.copyToClipboard(roomUrl);
         }
+    }
+
+    copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            this.showNotification('✅ تم نسخ رابط الدعوة', 'success');
+        }).catch(() => {
+            this.showNotification('❌ فشل النسخ', 'error');
+        });
     }
 
     loadStats() {
         try {
-            const saved = localStorage.getItem('fruitGameStats');
+            const saved = localStorage.getItem('fruitClash_stats');
             return saved ? JSON.parse(saved) : {
                 gamesPlayed: 0,
                 wins: 0,
                 fastestWin: null,
                 winStreak: 0,
-                totalCards: 0
+                totalCards: 0,
+                lastPlayed: null
             };
         } catch (e) {
-            console.warn('خطأ في قراءة الإحصائيات من localStorage', e);
-            localStorage.removeItem('fruitGameStats');
+            console.warn('خطأ في تحميل الإحصائيات:', e);
             return {
                 gamesPlayed: 0,
                 wins: 0,
                 fastestWin: null,
                 winStreak: 0,
-                totalCards: 0
+                totalCards: 0,
+                lastPlayed: null
             };
         }
     }
 
     updateStats(type, value) {
-        if (!this.state.stats) this.state.stats = this.loadStats();
-
-        if (type === 'win') {
-            this.state.stats.wins++;
-            this.state.stats.winStreak++;
-
-            if (!this.state.stats.fastestWin || value < this.state.stats.fastestWin) {
-                this.state.stats.fastestWin = value;
-            }
+        if (!this.state.stats) {
+            this.state.stats = this.loadStats();
         }
 
-        this.state.stats.gamesPlayed++;
+        switch(type) {
+            case 'win':
+                this.state.stats.wins++;
+                this.state.stats.winStreak++;
+                this.state.stats.gamesPlayed++;
+                
+                if (!this.state.stats.fastestWin || value < this.state.stats.fastestWin) {
+                    this.state.stats.fastestWin = value;
+                }
+                break;
+                
+            case 'loss':
+                this.state.stats.winStreak = 0;
+                this.state.stats.gamesPlayed++;
+                break;
+        }
+
+        this.state.stats.lastPlayed = new Date().toISOString();
+
         try {
-            localStorage.setItem('fruitGameStats', JSON.stringify(this.state.stats));
+            localStorage.setItem('fruitClash_stats', JSON.stringify(this.state.stats));
         } catch (e) {
-            console.warn('تعذر حفظ الإحصائيات', e);
+            console.warn('تعذر حفظ الإحصائيات:', e);
         }
     }
 
     simulateOnlineCount() {
-        setInterval(() => {
-            const online = Math.floor(Math.random() * 200) + 50;
-            const onlineEl = this.getEl('online-count');
-            if (onlineEl) onlineEl.textContent = online;
+        const updateCounts = () => {
+            const onlineEl = this.getElement('online-count');
+            const gamesEl = this.getElement('games-count');
 
-            const games = Math.floor(Math.random() * 1000) + 500;
-            const gamesEl = this.getEl('games-count');
+            if (onlineEl) {
+                const online = Math.floor(Math.random() * 500) + 100;
+                onlineEl.textContent = online;
+            }
+
             if (gamesEl) {
+                const games = Math.floor(Math.random() * 5000) + 1000;
                 gamesEl.textContent = games > 1000 ? (games / 1000).toFixed(1) + 'k' : games;
             }
-        }, 5000);
+        };
+
+        updateCounts();
+        setInterval(updateCounts, 10000);
     }
 
     startBackgroundAnimation() {
+        let frame = 0;
         setInterval(() => {
-            const fruits = document.querySelectorAll('.fruit-icon');
-            fruits.forEach(fruit => {
-                fruit.style.transform = `translateY(${Math.sin(Date.now() / 500) * 10}px)`;
+            frame++;
+            document.querySelectorAll('.fruit-icon, .floating-fruit').forEach(el => {
+                if (el) {
+                    const yOffset = Math.sin(frame * 0.1) * 10;
+                    el.style.transform = `translateY(${yOffset}px)`;
+                }
             });
         }, 50);
     }
 
+    updateGameUI() {
+        const roundEl = this.getElement('round-number');
+        if (roundEl) roundEl.textContent = this.state.gameData.currentRound;
+    }
+
     showScreen(screenName) {
+        // إخفاء جميع الشاشات
         document.querySelectorAll('.screen').forEach(screen => {
             screen.classList.add('hidden');
         });
 
+        // إظهار الشاشة المطلوبة
         const screenMap = {
             'main-menu': 'main-menu',
             'lobby': 'lobby-screen',
             'game': 'game-screen',
-            'mainMenu': 'main-menu',
             'join': 'join-screen'
         };
 
         const targetId = screenMap[screenName] || screenName;
-        const targetScreen = this.getEl(targetId);
+        const targetScreen = this.getElement(targetId);
 
         if (targetScreen) {
             targetScreen.classList.remove('hidden');
+            
+            // تحديث بيانات الشاشة إذا لزم الأمر
+            if (screenName === 'lobby') {
+                this.updateLobbyDisplay();
+            } else if (screenName === 'game') {
+                this.updateGameUI();
+            }
         } else {
             console.warn('الشاشة غير موجودة:', screenName);
         }
     }
 
-    getFruitName(emoji) {
-        const names = {
-            '🍎': 'تفاح',
-            '🍌': 'موز',
-            '🍊': 'برتقال',
-            '🍇': 'عنب',
-            '🍓': 'فراولة',
-            '🍉': 'بطيخ',
-            '🍒': 'كرز',
-            '🍍': 'أناناس'
-        };
-        return names[emoji] || 'فاكهة';
-    }
-
     startSinglePlayer() {
-        this.showToast('وضع اللاعب الواحد قريباً', 'info');
-    }
-
-    updateLobbyDisplay() {
-        const playerName = this.state.playerName;
-        const hostCard = document.querySelector('.host-card .player-name');
-        if (hostCard) hostCard.textContent = playerName;
-    }
-
-    updateGameUI() {
-        const roundEl = this.getEl('round-number');
-        if (roundEl) roundEl.textContent = this.state.gameData.currentRound;
+        this.showNotification('🎮 وضع اللاعب الواحد قيد التطوير', 'info');
     }
 
     async leaveRoom() {
-        if (this.useFirebase && this.db && this.state.roomId) {
-            try {
-                await this.db.collection('rooms').doc(this.state.roomId).update({
-                    [`players.${this.state.playerId}`]: firebase.firestore.FieldValue.delete(),
-                    playerCount: firebase.firestore.FieldValue.increment(-1)
-                });
-
-                this.state.unsubscribeFunctions.forEach(unsub => {
-                    try { if (typeof unsub === 'function') unsub(); } catch (e) { console.warn('unsubscribe failed', e); }
-                });
-                this.state.unsubscribeFunctions = [];
-
-            } catch (error) {
-                console.error('خطأ في الخروج:', error);
-            }
-        } else {
-            // تنظيف محلي
-            this.state.players = {};
-            this.state.roomId = null;
-            this.state.playerId = null;
-            this.state.unsubscribeFunctions = [];
-        }
-
+        // تنظيف حالة الغرفة
+        this.state.roomId = null;
+        this.state.isHost = false;
+        this.state.players = {};
+        this.state.gameData.playersCards = {};
+        this.state.gameData.gameActive = false;
+        
+        this.stopTimer();
         this.showScreen('main-menu');
-        this.showToast('تم الخروج', 'info');
+        this.showNotification('👋 تم الخروج من الغرفة', 'info');
     }
 }
 
-// دوال عامة للوصول من HTML (كما في الأصل)
-function goBack() {
-    if (window.game) {
-        window.game.showScreen('main-menu');
+// الدوال العامة للوصول من HTML
+window.game = null;
+
+function initializeGame() {
+    if (!window.game) {
+        window.game = new ModernGame();
     }
+    return window.game;
+}
+
+// تصدير الدوال المطلوبة من HTML
+function goBack() {
+    const game = window.game || initializeGame();
+    game.showScreen('main-menu');
 }
 
 function copyRoomCode() {
+    const game = window.game || initializeGame();
     const code = document.getElementById('room-code')?.textContent;
-    if (code && window.game) {
-        navigator.clipboard.writeText(code);
-        window.game.showToast('تم نسخ الرمز', 'success');
+    if (code) {
+        game.copyToClipboard(code);
     }
 }
 
@@ -905,66 +859,69 @@ function closeSideMenu() {
 }
 
 function quickJoinRandom() {
-    if (window.game) {
-        window.game.showJoinScreen();
-    }
+    const game = window.game || initializeGame();
+    game.showJoinDialog();
 }
 
 function openTutorial() {
-    if (window.game) {
-        window.game.showToast('شرح اللعبة قريباً', 'info');
-    }
+    const game = window.game || initializeGame();
+    game.showNotification('📚 شرح اللعبة قيد الإعداد', 'info');
 }
 
 function showStats() {
-    if (window.game?.state?.stats) {
-        const stats = window.game.state.stats;
-        alert(`📊 إحصائياتك:
-        🎮 ألعاب: ${stats.gamesPlayed || 0}
-        🏆 فوز: ${stats.wins || 0}
+    const game = window.game || initializeGame();
+    const stats = game.state.stats;
+    
+    const statsMessage = `
+        📊 إحصائياتك:
+        🎮 الألعاب: ${stats.gamesPlayed || 0}
+        🏆 الفوز: ${stats.wins || 0}
         ⚡ أسرع فوز: ${stats.fastestWin || '--'} ثانية
-        🔥 فوز متتالي: ${stats.winStreak || 0}`);
-    }
+        🔥 الفوز المتتالي: ${stats.winStreak || 0}
+    `;
+    
+    game.showNotification(statsMessage, 'info');
 }
 
 function leaveGame() {
-    if (confirm('هل تريد الخروج من اللعبة؟')) {
-        if (window.game) {
-            window.game.leaveRoom();
-        }
+    if (confirm('هل أنت متأكد من الخروج من اللعبة؟')) {
+        const game = window.game || initializeGame();
+        game.leaveRoom();
         closeSideMenu();
     }
 }
 
 function shareInvite() {
-    if (window.game) {
-        window.game.shareInvite();
-    }
+    const game = window.game || initializeGame();
+    game.shareInvite();
 }
 
 function showSettings() {
-    if (window.game) {
-        window.game.showToast('الإعدادات قريباً', 'info');
-    }
+    const game = window.game || initializeGame();
+    game.showNotification('⚙️ الإعدادات قيد التطوير', 'info');
 }
 
 function showHowToPlay() {
-    if (window.game) {
-        window.game.showToast('كيفية اللعب قريباً', 'info');
-    }
+    const game = window.game || initializeGame();
+    game.showNotification('📖 كيفية اللعب: اجمع 4 بطاقات متطابقة للفوز!', 'info');
 }
 
 function shareApp() {
+    const game = window.game || initializeGame();
     if (navigator.share) {
         navigator.share({
             title: 'Fruit Clash',
-            text: 'لعبة الفواكه الأربعة',
+            text: 'لعبة الفواكه الأربعة الشيقة',
             url: window.location.href
+        }).catch(() => {
+            game.copyToClipboard(window.location.href);
         });
     } else {
-        navigator.clipboard.writeText(window.location.href);
-        if (window.game) {
-            window.game.showToast('تم نسخ الرابط', 'success');
-        }
+        game.copyToClipboard(window.location.href);
     }
 }
+
+// تهيئة اللعبة عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', () => {
+    initializeGame();
+});
