@@ -400,5 +400,28 @@
         document.addEventListener('contextmenu', e => e.preventDefault());
         document.addEventListener('selectstart', e => e.preventDefault());
     </script>
+    <!-- نافذة اختيار الصعوبة -->
+<div id="difficulty-modal" class="modern-modal hidden">
+    <div class="difficulty-selector">
+        <h3>🎮 اختر مستوى الصعوبة</h3>
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn easy" onclick="setDifficulty('easy')">
+                <i class="fas fa-smile"></i>
+                سهل 🟢
+            </button>
+            <button class="difficulty-btn medium" onclick="setDifficulty('medium')">
+                <i class="fas fa-meh"></i>
+                متوسط 🟡
+            </button>
+            <button class="difficulty-btn hard" onclick="setDifficulty('hard')">
+                <i class="fas fa-frown"></i>
+                صعب 🔴
+            </button>
+        </div>
+        <button class="modal-btn secondary" style="margin-top: 20px;" onclick="closeDifficultyModal()">
+            إلغاء
+        </button>
+    </div>
+</div>
 </body>
 </html>
