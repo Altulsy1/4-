@@ -1404,4 +1404,91 @@ button {
     transform: translateY(-2px);
     box-shadow: var(--shadow);
 }
+    /* شاشة اختيار الصعوبة */
+.difficulty-selector {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 30px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 2000;
+    width: 90%;
+    max-width: 350px;
+    text-align: center;
+}
+
+.difficulty-selector h3 {
+    color: var(--dark);
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+}
+
+.difficulty-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.difficulty-btn {
+    padding: 15px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.difficulty-btn.easy {
+    background: linear-gradient(135deg, #00b894, #00cec9);
+    color: white;
+}
+
+.difficulty-btn.medium {
+    background: linear-gradient(135deg, #fdcb6e, #e17055);
+    color: white;
+}
+
+.difficulty-btn.hard {
+    background: linear-gradient(135deg, #d63031, #e74c3c);
+    color: white;
+}
+
+.difficulty-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+}
+
+/* تنسيق خاص للذكاء الاصطناعي */
+.ai-player .progress-avatar {
+    background: linear-gradient(135deg, #4a90e2, #357abd);
+}
+
+.ai-player .progress-name {
+    color: #4a90e2;
+}
+
+.ai-player .progress-bar {
+    background: linear-gradient(90deg, #4a90e2, #63b3ed);
+}
+
+.fa-robot {
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.ai-player.thinking {
+    animation: aiThinking 1s infinite;
+}
+
+@keyframes aiThinking {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
 }
