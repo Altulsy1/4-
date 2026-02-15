@@ -313,7 +313,30 @@
                 خروج من الغرفة
             </button>
         </div>
-
+<!-- نافذة اختيار الصعوبة -->
+<div id="difficulty-modal" class="modern-modal hidden">
+    <div class="difficulty-selector">
+        <h3>🎮 اختر مستوى الصعوبة</h3>
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn easy" onclick="window.game?.setDifficulty('easy')">
+                <i class="fas fa-smile"></i>
+                سهل 🟢
+            </button>
+            <button class="difficulty-btn medium" onclick="window.game?.setDifficulty('medium')">
+                <i class="fas fa-meh"></i>
+                متوسط 🟡
+            </button>
+            <button class="difficulty-btn hard" onclick="window.game?.setDifficulty('hard')">
+                <i class="fas fa-frown"></i>
+                صعب 🔴
+            </button>
+        </div>
+        <button class="modal-btn secondary" style="margin-top: 20px;" onclick="closeDifficultyModal()">
+            إلغاء
+        </button>
+    </div>
+</div>
+        
         <div class="side-menu-footer">
             <span>Fruit Clash v1.0.0</span>
             <span style="display: block; font-size: 0.8rem; margin-top: 5px;">
