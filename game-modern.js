@@ -25,6 +25,11 @@ class ModernGame {
         };
 
         this.timerInterval = null;
+        // إضافة خاصيات الذكاء الاصطناعي
+        this.aiPlayers = [];
+        this.aiDifficulty = 'medium';
+        this.gameMode = 'online';
+        
         this.fruitsNames = {
             '🍎': 'تفاح', '🍌': 'موز', '🍊': 'برتقال',
             '🍇': 'عنب', '🍓': 'فراولة', '🍉': 'بطيخ',
@@ -59,313 +64,6 @@ class ModernGame {
             setTimeout(() => {
                 this.joinRoom(joinCode.toUpperCase());
             }, 1000);
-            // أضف هذه الخاصيات في constructor
-constructor() {
-    // ... الكود الموجود ...
-    
-    // إضافة خاصيات الذكاء الاصطناعي
-    this.aiPlayers = [];
-    this.aiDifficulty = 'medium'; // 'easy', 'medium', 'hard'
-    this.gameMode = 'online'; // 'online', 'single'
-    
-    // ... باقي الكود ...
-}
-
-// دالة بدء اللعب الفردي (استبدل الدالة الموجودة)
-startSinglePlayer() {
-    this.gameMode = 'single';
-    this.state.isHost = true; // أنت المضيف في وضع الفردي
-    this.state.playerId = this.generatePlayerId();
-    
-    // إنشاء لاعبي الذكاء الاصطناعي
-    this.createAIPlayers(3); // 3 خصوم + أنت = 4 لاعبين
-    
-    // الانتقال مباشرة للعبة
-    this.showScreen('game');
-    this.initializeRound();
-    
-    this.showNotification('🎮 وضع اللعب الفردي - تلعب ضد الذكاء الاصطناعي', 'success');
-    this.playSound('start');
-}
-
-// إنشاء لاعبي الذكاء الاصطناعي
-createAIPlayers(count) {
-    const aiNames = ['روبوت 1', 'روبوت 2', 'روبوت 3', 'روبوت ذكي', 'الخصم', 'لاعب X'];
-    const aiAvatars = [
-        'https://api.dicebear.com/7.x/bottts/svg?seed=ai1',
-        'https://api.dicebear.com/7.x/bottts/svg?seed=ai2',
-        'https://api.dicebear.com/7.x/bottts/svg?seed=ai3',
-        'https://api.dicebear.com/7.x/bottts/svg?seed=ai4'
-    ];
-    
-    for (let i = 0; i < count; i++) {
-        const aiId = 'ai_' + Date.now() + '_' + i;
-        this.aiPlayers.push({
-            id: aiId,
-            name: aiNames[Math.floor(Math.random() * aiNames.length)] + ' ' + (i + 1),
-            avatar: aiAvatars[i % aiAvatars.length],
-            isHost: false,
-            isAI: true,
-            difficulty: this.aiDifficulty,
-            reactionTime: this.getAIReactionTime(), // وقت رد الفعل بالمللي ثانية
-            strategy: this.getAIStrategy()
-        });
-        
-        // إضافة للاعبين في الدولة
-        this.state.players[aiId] = {
-            name: this.aiPlayers[i].name,
-            avatar: this.aiPlayers[i].avatar,
-            isHost: false,
-            isAI: true
-        };
-    }
-    
-    console.log(`🤖 تم إنشاء ${count} لاعب من الذكاء الاصطناعي`);
-}
-
-// تحديد وقت رد فعل الذكاء الاصطناعي حسب الصعوبة
-getAIReactionTime() {
-    switch(this.aiDifficulty) {
-        case 'easy': return 3000 + Math.random() * 2000; // 3-5 ثواني
-        case 'medium': return 1500 + Math.random() * 1500; // 1.5-3 ثواني
-        case 'hard': return 500 + Math.random() * 1000; // 0.5-1.5 ثانية
-        default: return 2000;
-    }
-}
-
-// استراتيجية اللعب حسب الصعوبة
-getAIStrategy() {
-    const strategies = ['aggressive', 'balanced', 'cautious'];
-    switch(this.aiDifficulty) {
-        case 'easy': return 'cautious';
-        case 'medium': return 'balanced';
-        case 'hard': return 'aggressive';
-        default: return 'balanced';
-    }
-}
-
-// تعديل دالة dealCards لدعم الذكاء الاصطناعي
-dealCards() {
-    const allCards = [];
-    const timestamp = Date.now();
-
-    // إنشاء 16 بطاقة
-    for (let i = 0; i < 16; i++) {
-        const fruitIndex = Math.floor(Math.random() * this.state.gameData.fruits.length);
-        const emoji = this.state.gameData.fruits[fruitIndex];
-        allCards.push({
-            id: `card-${i}-${timestamp}`,
-            emoji: emoji,
-            name: this.fruitsNames[emoji] || 'فاكهة',
-            fruitId: fruitIndex
-        });
-    }
-
-    // خلط البطاقات
-    this.shuffleArray(allCards);
-
-    // تحديد جميع اللاعبين (اللاعب الحقيقي + الذكاء الاصطناعي)
-    const allPlayerIds = [this.state.playerId, ...this.aiPlayers.map(ai => ai.id)];
-    
-    // توزيع البطاقات
-    allPlayerIds.forEach((playerId, index) => {
-        const startIdx = index * 4;
-        const endIdx = startIdx + 4;
-        const playerCards = allCards.slice(startIdx, endIdx);
-        
-        this.state.gameData.playersCards[playerId] = playerCards;
-
-        // عرض بطاقات اللاعب الحقيقي فقط
-        if (playerId === this.state.playerId) {
-            this.displayMyCards(playerCards);
-        }
-    });
-
-    // عرض تقدم جميع اللاعبين
-    this.displayPlayersProgress();
-    
-    // بدء تفكير الذكاء الاصطناعي
-    if (this.gameMode === 'single') {
-        this.startAIThinking();
-    }
-}
-
-// خلط المصفوفة
-shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
-
-// بدء تفكير الذكاء الاصطناعي
-startAIThinking() {
-    this.aiPlayers.forEach(ai => {
-        const aiCards = this.state.gameData.playersCards[ai.id];
-        if (!aiCards) return;
-        
-        // تأخير حسب صعوبة الذكاء الاصطناعي
-        setTimeout(() => {
-            this.aiMakeDecision(ai, aiCards);
-        }, ai.reactionTime);
-    });
-}
-
-// اتخاذ قرار الذكاء الاصطناعي
-aiMakeDecision(ai, cards) {
-    if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) return;
-    
-    // تحليل البطاقات
-    const counts = {};
-    cards.forEach(card => {
-        counts[card.emoji] = (counts[card.emoji] || 0) + 1;
-    });
-    
-    const maxCount = Math.max(...Object.values(counts));
-    const hasFour = maxCount >= 4;
-    
-    // استراتيجية الذكاء الاصطناعي
-    switch(ai.strategy) {
-        case 'aggressive':
-            // إذا كان لديه 3 أو أكثر، يحاول الفوز
-            if (maxCount >= 3 || hasFour) {
-                if (hasFour) {
-                    this.aiClaimWin(ai);
-                } else {
-                    this.aiSwapCards(ai, cards, counts);
-                }
-            }
-            break;
-            
-        case 'balanced':
-            // متوازن - يفوز فقط إذا كان لديه 4
-            if (hasFour) {
-                this.aiClaimWin(ai);
-            } else if (Math.random() > 0.7) {
-                this.aiSwapCards(ai, cards, counts);
-            }
-            break;
-            
-        case 'cautious':
-            // حذر - يفوز فقط إذا كان متأكد
-            if (hasFour && maxCount === 4) {
-                this.aiClaimWin(ai);
-            }
-            break;
-    }
-    
-    // تحديث عرض تقدم الذكاء الاصطناعي
-    this.updateAIDisplay(ai);
-}
-
-// الذكاء الاصطناعي يطالب بالفوز
-aiClaimWin(ai) {
-    console.log(`🤖 ${ai.name} يطالب بالفوز!`);
-    
-    // تأخير بسيط لإعطاء شعور طبيعي
-    setTimeout(() => {
-        if (this.state.gameData.gameActive && !this.state.gameData.roundWinner) {
-            this.handleWin(ai.id);
-            this.showNotification(`🤖 ${ai.name} فاز بالجولة!`, 'info');
-        }
-    }, 500);
-}
-
-// الذكاء الاصطناعي يبدل البطاقات (محاكاة)
-aiSwapCards(ai, cards, counts) {
-    // محاكاة تبديل البطاقات - في النسخة الكاملة يمكن تنفيذ منطق حقيقي
-    console.log(`🤖 ${ai.name} يفكر في تبديل البطاقات...`);
-}
-
-// تحديث عرض الذكاء الاصطناعي
-updateAIDisplay(ai) {
-    const container = this.getElement('players-progress');
-    if (!container) return;
-    
-    // تحديث التقدم للذكاء الاصطناعي
-    const aiCards = this.state.gameData.playersCards[ai.id];
-    if (aiCards) {
-        const maxSame = this.getMaxSameCards(aiCards);
-        const progress = (maxSame / 4) * 100;
-        
-        // البحث عن عنصر الذكاء الاصطناعي وتحديثه
-        const aiElements = container.querySelectorAll('.player-progress-item');
-        aiElements.forEach(el => {
-            const nameEl = el.querySelector('.progress-name');
-            if (nameEl && nameEl.textContent === ai.name) {
-                const bar = el.querySelector('.progress-bar');
-                const count = el.querySelector('.progress-count');
-                if (bar) bar.style.width = progress + '%';
-                if (count) count.textContent = maxSame + '/4';
-            }
-        });
-    }
-}
-
-// إضافة دالة لاختيار صعوبة الذكاء الاصطناعي
-showDifficultySelection() {
-    const difficulty = prompt('اختر مستوى الصعوبة:\n1 - سهل 🟢\n2 - متوسط 🟡\n3 - صعب 🔴', '2');
-    
-    switch(difficulty) {
-        case '1':
-            this.aiDifficulty = 'easy';
-            break;
-        case '2':
-            this.aiDifficulty = 'medium';
-            break;
-        case '3':
-            this.aiDifficulty = 'hard';
-            break;
-        default:
-            this.aiDifficulty = 'medium';
-    }
-    
-    this.startSinglePlayer();
-}
-
-// تعديل دالة displayPlayersProgress لدور الذكاء الاصطناعي
-displayPlayersProgress() {
-    const container = this.getElement('players-progress');
-    if (!container) return;
-
-    container.innerHTML = '';
-    
-    // عرض جميع اللاعبين (بما فيهم الذكاء الاصطناعي)
-    const allPlayers = [
-        { id: this.state.playerId, ...this.state.players[this.state.playerId], isMe: true },
-        ...this.aiPlayers.map(ai => ({ id: ai.id, ...ai, isAI: true }))
-    ];
-    
-    allPlayers.forEach(player => {
-        const cards = this.state.gameData.playersCards[player.id];
-        if (!cards) return;
-        
-        const maxSame = this.getMaxSameCards(cards);
-        const progress = (maxSame / 4) * 100;
-        
-        const progressEl = document.createElement('div');
-        progressEl.className = `player-progress-item ${player.id === this.state.gameData.roundWinner ? 'winner' : ''} ${player.isAI ? 'ai-player' : ''}`;
-        
-        // أيقونة مختلفة للذكاء الاصطناعي
-        const avatarHtml = player.isAI 
-            ? '<i class="fas fa-robot" style="font-size: 24px; color: white;"></i>'
-            : `<img src="${player.avatar}" alt="${player.name}">`;
-        
-        progressEl.innerHTML = `
-            <div class="progress-avatar">
-                ${avatarHtml}
-            </div>
-            <div class="progress-name">${player.name} ${player.isAI ? '🤖' : ''}</div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" style="width: ${progress}%"></div>
-            </div>
-            <div class="progress-count">${maxSame}/4</div>
-        `;
-        
-        container.appendChild(progressEl);
-    });
-}
         }
     }
 
@@ -373,7 +71,7 @@ displayPlayersProgress() {
         // أزرار القائمة الرئيسية
         this.getElement('create-room-btn')?.addEventListener('click', () => this.createRoom());
         this.getElement('join-room-btn')?.addEventListener('click', () => this.showJoinDialog());
-        this.getElement('single-player-btn')?.addEventListener('click', () => this.startSinglePlayer());
+        this.getElement('single-player-btn')?.addEventListener('click', () => this.showDifficultySelection());
         this.getElement('edit-name-btn')?.addEventListener('click', () => this.changePlayerName());
 
         // أزرار اللعبة
@@ -408,6 +106,103 @@ displayPlayersProgress() {
             localStorage.setItem('fruitClash_playerName', this.state.playerName);
             this.updatePlayerDisplay();
             this.showNotification('✅ تم تحديث الاسم', 'success');
+        }
+    }
+
+    // دوال اختيار الصعوبة
+    showDifficultySelection() {
+        const modal = this.getElement('difficulty-modal');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    closeDifficultyModal() {
+        const modal = this.getElement('difficulty-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    setDifficulty(level) {
+        this.aiDifficulty = level;
+        this.closeDifficultyModal();
+        this.startSinglePlayerWithAI();
+    }
+
+    getDifficultyName() {
+        const names = {
+            'easy': 'سهل',
+            'medium': 'متوسط',
+            'hard': 'صعب'
+        };
+        return names[this.aiDifficulty] || 'متوسط';
+    }
+
+    startSinglePlayerWithAI() {
+        this.gameMode = 'single';
+        this.state.isHost = true;
+        this.state.playerId = this.generatePlayerId();
+        
+        // إعادة تعيين لاعبي الذكاء الاصطناعي
+        this.aiPlayers = [];
+        
+        // إنشاء لاعبي الذكاء الاصطناعي (3 خصوم)
+        this.createAIPlayers(3);
+        
+        // الانتقال للعبة
+        this.showScreen('game');
+        this.initializeRound();
+        
+        this.showNotification(`🎮 وضع اللعب الفردي - مستوى ${this.getDifficultyName()}`, 'success');
+        this.playSound('start');
+    }
+
+    createAIPlayers(count) {
+        const aiNames = ['روبوت 1', 'روبوت 2', 'روبوت 3', 'روبوت ذكي', 'الخصم', 'لاعب X'];
+        const aiAvatars = [
+            'https://api.dicebear.com/7.x/bottts/svg?seed=ai1',
+            'https://api.dicebear.com/7.x/bottts/svg?seed=ai2',
+            'https://api.dicebear.com/7.x/bottts/svg?seed=ai3',
+            'https://api.dicebear.com/7.x/bottts/svg?seed=ai4'
+        ];
+        
+        for (let i = 0; i < count; i++) {
+            const aiId = 'ai_' + Date.now() + '_' + i;
+            this.aiPlayers.push({
+                id: aiId,
+                name: aiNames[Math.floor(Math.random() * aiNames.length)] + ' ' + (i + 1),
+                avatar: aiAvatars[i % aiAvatars.length],
+                isHost: false,
+                isAI: true,
+                difficulty: this.aiDifficulty,
+                reactionTime: this.getAIReactionTime(),
+                strategy: this.getAIStrategy()
+            });
+            
+            // إضافة للاعبين في الدولة
+            this.state.players[aiId] = {
+                name: this.aiPlayers[i].name,
+                avatar: this.aiPlayers[i].avatar,
+                isHost: false,
+                isAI: true
+            };
+        }
+        
+        console.log(`🤖 تم إنشاء ${count} لاعب من الذكاء الاصطناعي`);
+    }
+
+    getAIReactionTime() {
+        switch(this.aiDifficulty) {
+            case 'easy': return 3000 + Math.random() * 2000;
+            case 'medium': return 1500 + Math.random() * 1500;
+            case 'hard': return 500 + Math.random() * 1000;
+            default: return 2000;
+        }
+    }
+
+    getAIStrategy() {
+        switch(this.aiDifficulty) {
+            case 'easy': return 'cautious';
+            case 'medium': return 'balanced';
+            case 'hard': return 'aggressive';
+            default: return 'balanced';
         }
     }
 
@@ -653,23 +448,121 @@ displayPlayersProgress() {
             });
         }
 
-        // توزيع البطاقات على اللاعبين (4 بطاقات لكل لاعب)
-        const playerIds = [this.state.playerId, ...Object.keys(this.state.players).filter(id => id !== this.state.playerId)];
+        // خلط البطاقات
+        this.shuffleArray(allCards);
+
+        // تحديد جميع اللاعبين
+        const allPlayerIds = [this.state.playerId, ...this.aiPlayers.map(ai => ai.id)];
         
-        playerIds.forEach((playerId, index) => {
+        // توزيع البطاقات
+        allPlayerIds.forEach((playerId, index) => {
             const startIdx = index * 4;
             const endIdx = startIdx + 4;
             const playerCards = allCards.slice(startIdx, endIdx);
             
             this.state.gameData.playersCards[playerId] = playerCards;
 
+            // عرض بطاقات اللاعب الحقيقي فقط
             if (playerId === this.state.playerId) {
                 this.displayMyCards(playerCards);
             }
         });
 
-        // عرض تقدم اللاعبين الآخرين
+        // عرض تقدم جميع اللاعبين
         this.displayPlayersProgress();
+        
+        // بدء تفكير الذكاء الاصطناعي
+        if (this.gameMode === 'single') {
+            this.startAIThinking();
+        }
+    }
+
+    shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    startAIThinking() {
+        this.aiPlayers.forEach(ai => {
+            const aiCards = this.state.gameData.playersCards[ai.id];
+            if (!aiCards) return;
+            
+            setTimeout(() => {
+                this.aiMakeDecision(ai, aiCards);
+            }, ai.reactionTime);
+        });
+    }
+
+    aiMakeDecision(ai, cards) {
+        if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) return;
+        
+        const counts = {};
+        cards.forEach(card => {
+            counts[card.emoji] = (counts[card.emoji] || 0) + 1;
+        });
+        
+        const maxCount = Math.max(...Object.values(counts));
+        const hasFour = maxCount >= 4;
+        
+        switch(ai.strategy) {
+            case 'aggressive':
+                if (maxCount >= 3 || hasFour) {
+                    if (hasFour) {
+                        this.aiClaimWin(ai);
+                    }
+                }
+                break;
+                
+            case 'balanced':
+                if (hasFour) {
+                    this.aiClaimWin(ai);
+                }
+                break;
+                
+            case 'cautious':
+                if (hasFour && maxCount === 4) {
+                    this.aiClaimWin(ai);
+                }
+                break;
+        }
+        
+        this.updateAIDisplay(ai);
+    }
+
+    aiClaimWin(ai) {
+        console.log(`🤖 ${ai.name} يطالب بالفوز!`);
+        
+        setTimeout(() => {
+            if (this.state.gameData.gameActive && !this.state.gameData.roundWinner) {
+                this.handleWin(ai.id);
+                this.showNotification(`🤖 ${ai.name} فاز بالجولة!`, 'info');
+            }
+        }, 500);
+    }
+
+    updateAIDisplay(ai) {
+        const container = this.getElement('players-progress');
+        if (!container) return;
+        
+        const aiCards = this.state.gameData.playersCards[ai.id];
+        if (aiCards) {
+            const maxSame = this.getMaxSameCards(aiCards);
+            const progress = (maxSame / 4) * 100;
+            
+            const aiElements = container.querySelectorAll('.player-progress-item');
+            aiElements.forEach(el => {
+                const nameEl = el.querySelector('.progress-name');
+                if (nameEl && nameEl.textContent.includes(ai.name)) {
+                    const bar = el.querySelector('.progress-bar');
+                    const count = el.querySelector('.progress-count');
+                    if (bar) bar.style.width = progress + '%';
+                    if (count) count.textContent = maxSame + '/4';
+                }
+            });
+        }
     }
 
     displayMyCards(cards) {
@@ -732,21 +625,35 @@ displayPlayersProgress() {
 
         container.innerHTML = '';
         
-        Object.entries(this.state.gameData.playersCards).forEach(([playerId, cards]) => {
-            const playerInfo = this.state.players[playerId] || { name: 'خصم', avatar: this.state.avatar };
-            const progress = this.calculatePlayerProgress(cards);
+        // عرض جميع اللاعبين
+        const allPlayers = [
+            { id: this.state.playerId, ...this.state.players[this.state.playerId], isMe: true },
+            ...this.aiPlayers.map(ai => ({ id: ai.id, ...ai, isAI: true }))
+        ];
+        
+        allPlayers.forEach(player => {
+            const cards = this.state.gameData.playersCards[player.id];
+            if (!cards) return;
+            
+            const maxSame = this.getMaxSameCards(cards);
+            const progress = (maxSame / 4) * 100;
             
             const progressEl = document.createElement('div');
-            progressEl.className = `player-progress-item ${playerId === this.state.gameData.roundWinner ? 'winner' : ''}`;
+            progressEl.className = `player-progress-item ${player.id === this.state.gameData.roundWinner ? 'winner' : ''} ${player.isAI ? 'ai-player' : ''}`;
+            
+            const avatarHtml = player.isAI 
+                ? '<i class="fas fa-robot" style="font-size: 24px; color: white;"></i>'
+                : `<img src="${player.avatar}" alt="${player.name}">`;
+            
             progressEl.innerHTML = `
                 <div class="progress-avatar">
-                    <img src="${playerInfo.avatar}" alt="${playerInfo.name}">
+                    ${avatarHtml}
                 </div>
-                <div class="progress-name">${playerInfo.name}</div>
+                <div class="progress-name">${player.name} ${player.isAI ? '🤖' : ''}</div>
                 <div class="progress-bar-container">
                     <div class="progress-bar" style="width: ${progress}%"></div>
                 </div>
-                <div class="progress-count">${this.getMaxSameCards(cards)}/4</div>
+                <div class="progress-count">${maxSame}/4</div>
             `;
             
             container.appendChild(progressEl);
@@ -829,7 +736,7 @@ displayPlayersProgress() {
 
     startTimer(seconds) {
         let timeLeft = seconds;
-        const totalDash = 283; // قيمة stroke-dasharray
+        const totalDash = 283;
         const timerProgress = this.getElement('timer-progress');
         const gameTimer = this.getElement('game-timer');
         const roundNumber = this.getElement('round-number');
@@ -869,7 +776,6 @@ displayPlayersProgress() {
         this.stopTimer();
         this.state.gameData.gameActive = false;
 
-        // تحديد اللاعب صاحب أكبر عدد من البطاقات المتطابقة
         let maxCount = 0;
         let winner = null;
 
@@ -907,9 +813,6 @@ displayPlayersProgress() {
                 origin: { y: 0.6 },
                 colors: ['#6C5CE7', '#00D2FF', '#FF7675', '#FDCB6E']
             });
-        } else {
-            // محاكاة confetti إذا لم تكن المكتبة محملة
-            console.log('🎊 تهانينا!');
         }
     }
 
@@ -925,13 +828,10 @@ displayPlayersProgress() {
 
         try {
             window.navigator.vibrate(patterns[intensity] || patterns.light);
-        } catch (e) {
-            // تجاهل أخطاء الاهتزاز
-        }
+        } catch (e) {}
     }
 
     playSound(type) {
-        // يمكن إضافة أصوات لاحقاً
         console.log(`🔊 تشغيل صوت: ${type}`);
     }
 
@@ -953,7 +853,6 @@ displayPlayersProgress() {
 
         document.body.appendChild(toast);
 
-        // تشغيل الأنيميشن
         setTimeout(() => toast.classList.add('show'), 10);
         setTimeout(() => {
             toast.classList.remove('show');
@@ -1003,7 +902,6 @@ displayPlayersProgress() {
                 lastPlayed: null
             };
         } catch (e) {
-            console.warn('خطأ في تحميل الإحصائيات:', e);
             return {
                 gamesPlayed: 0,
                 wins: 0,
@@ -1041,9 +939,7 @@ displayPlayersProgress() {
 
         try {
             localStorage.setItem('fruitClash_stats', JSON.stringify(this.state.stats));
-        } catch (e) {
-            console.warn('تعذر حفظ الإحصائيات:', e);
-        }
+        } catch (e) {}
     }
 
     simulateOnlineCount() {
@@ -1085,12 +981,10 @@ displayPlayersProgress() {
     }
 
     showScreen(screenName) {
-        // إخفاء جميع الشاشات
         document.querySelectorAll('.screen').forEach(screen => {
             screen.classList.add('hidden');
         });
 
-        // إظهار الشاشة المطلوبة
         const screenMap = {
             'main-menu': 'main-menu',
             'lobby': 'lobby-screen',
@@ -1104,23 +998,15 @@ displayPlayersProgress() {
         if (targetScreen) {
             targetScreen.classList.remove('hidden');
             
-            // تحديث بيانات الشاشة إذا لزم الأمر
             if (screenName === 'lobby') {
                 this.updateLobbyDisplay();
             } else if (screenName === 'game') {
                 this.updateGameUI();
             }
-        } else {
-            console.warn('الشاشة غير موجودة:', screenName);
         }
     }
 
-    startSinglePlayer() {
-        this.showNotification('🎮 وضع اللاعب الواحد قيد التطوير', 'info');
-    }
-
     async leaveRoom() {
-        // تنظيف حالة الغرفة
         this.state.roomId = null;
         this.state.isHost = false;
         this.state.players = {};
@@ -1228,60 +1114,22 @@ function shareApp() {
     }
 }
 
+function showDifficultyModal() {
+    const game = window.game || initializeGame();
+    game.showDifficultySelection();
+}
+
+function closeDifficultyModal() {
+    const game = window.game || initializeGame();
+    game.closeDifficultyModal();
+}
+
+function setDifficulty(level) {
+    const game = window.game || initializeGame();
+    game.setDifficulty(level);
+}
+
 // تهيئة اللعبة عند تحميل الصفحة
 document.addEventListener('DOMContentLoaded', () => {
     initializeGame();
 });
-// دوال اختيار الصعوبة
-function showDifficultyModal() {
-    const modal = document.getElementById('difficulty-modal');
-    if (modal) modal.classList.remove('hidden');
-}
-
-function closeDifficultyModal() {
-    const modal = document.getElementById('difficulty-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-// تعديل دالة startSinglePlayer في الكلاس لفتح نافذة الصعوبة
-// (استبدل الدالة الموجودة)
-startSinglePlayer() {
-    showDifficultyModal();
-}
-
-// دالة جديدة لتعيين الصعوبة
-setDifficulty(level) {
-    this.aiDifficulty = level;
-    closeDifficultyModal();
-    this.startSinglePlayerWithAI();
-}
-
-// دالة بدء اللعب الفردي مع الذكاء الاصطناعي
-startSinglePlayerWithAI() {
-    this.gameMode = 'single';
-    this.state.isHost = true;
-    this.state.playerId = this.generatePlayerId();
-    
-    // إعادة تعيين لاعبي الذكاء الاصطناعي
-    this.aiPlayers = [];
-    
-    // إنشاء لاعبي الذكاء الاصطناعي (3 خصوم)
-    this.createAIPlayers(3);
-    
-    // الانتقال للعبة
-    this.showScreen('game');
-    this.initializeRound();
-    
-    this.showNotification(`🎮 وضع اللعب الفردي - مستوى ${this.getDifficultyName()}`, 'success');
-    this.playSound('start');
-}
-
-// الحصول على اسم مستوى الصعوبة
-getDifficultyName() {
-    const names = {
-        'easy': 'سهل',
-        'medium': 'متوسط',
-        'hard': 'صعب'
-    };
-    return names[this.aiDifficulty] || 'متوسط';
-}
