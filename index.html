@@ -1,240 +1,381 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Fruit Clash — لعبة الفواكه الأربعة</title>
-  <link rel="manifest" href="manifest.json" />
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-  <link href="style-modern.css" rel="stylesheet">
-  <style>
-    /* تحسينات صغيرة لعرض الـ toast داخل هذه الصفحة */
-    .toast-message {
-      position: fixed;
-      left: 50%;
-      transform: translateX(-50%);
-      bottom: 30px;
-      background: rgba(0,0,0,0.75);
-      color: white;
-      padding: 10px 16px;
-      border-radius: 20px;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      opacity: 0;
-      transition: opacity 0.25s, transform 0.25s;
-      z-index: 9999;
-    }
-    .toast-message.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
-    .toast-success { background: linear-gradient(90deg,#00B894,#00D2FF); }
-    .toast-error { background: linear-gradient(90deg,#FF7675,#FF6B6B); }
-    .toast-info { background: rgba(0,0,0,0.75); }
-    /* ضمان أن الشاشة مخفية بشكل افتراضي */
-    .screen { display: none; }
-    .screen.hidden { display: none !important; }
-    /* إظهار الشاشة الرئيسية عند التحميل */
-    #main-menu { display: block; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#6C5CE7">
+    <meta name="description" content="Fruit Clash - لعبة الفواكه الأربعة الشيقة. اجمع 4 بطاقات متطابقة واربح!">
+    <meta name="keywords" content="لعبة, فواكه, بطاقات, تحدي, أونلاين">
+    
+    <title>Fruit Clash - لعبة الفواكه الأربعة</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='80' font-size='80' text-anchor='middle' fill='%236C5CE7'%3E🍎%3C/text%3E%3C/svg%3E">
+    
+    <!-- Fonts and Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="style-modern.css">
+    
+    <!-- QR Code Library (اختياري) -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    
+    <!-- Confetti Library (اختياري) -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1"></script>
+    
+    <style>
+        /* تحسينات فورية للتجربة */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* تجنب وميض الشاشات */
+        .screen {
+            transition: opacity 0.3s ease;
+        }
+        
+        .screen.hidden {
+            display: none !important;
+        }
+    </style>
 </head>
 <body>
+    <!-- القائمة الرئيسية -->
+    <main id="main-menu" class="screen menu-screen">
+        <div class="menu-bg-pattern"></div>
+        
+        <div class="menu-content">
+            <header class="menu-header">
+                <h1 class="menu-title">Fruit Clash</h1>
+                <div class="menu-version">الإصدار 1.0.0</div>
+            </header>
 
-  <!-- MAIN MENU -->
-  <main id="main-menu" class="screen menu-screen">
-    <div class="menu-bg-pattern"></div>
-    <div class="menu-content">
-      <header class="menu-header">
-        <h1 class="menu-title">Fruit Clash</h1>
-        <div class="menu-version">الإصدار التجريبي</div>
-      </header>
+            <!-- بطاقة الملف الشخصي -->
+            <section class="player-profile-card">
+                <div class="player-avatar">
+                    <img id="menu-avatar" src="" alt="صورتك الشخصية" loading="lazy">
+                </div>
+                <div class="player-info">
+                    <span class="player-name-label">مرحباً،</span>
+                    <h3 id="player-name-display">لاعب</h3>
+                </div>
+                <button id="edit-name-btn" class="edit-name-btn" title="تعديل الاسم">
+                    <i class="fas fa-pen"></i>
+                </button>
+            </section>
 
-      <section class="player-profile-card">
-        <div class="player-avatar">
-          <img id="menu-avatar" src="" alt="avatar">
+            <!-- أزرار اللعب -->
+            <section class="menu-buttons-modern">
+                <button id="create-room-btn" class="menu-btn primary-btn">
+                    <i class="fas fa-plus-circle"></i>
+                    إنشاء غرفة جديدة
+                </button>
+                
+                <button id="join-room-btn" class="menu-btn secondary-btn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    انضم إلى غرفة
+                </button>
+                
+                <button id="single-player-btn" class="menu-btn outline-btn">
+                    <i class="fas fa-user"></i>
+                    العب بمفردك
+                </button>
+            </section>
+
+            <!-- تشغيل سريع -->
+            <section class="quick-play-section">
+                <div class="section-label">تشغيل سريع</div>
+                <div class="quick-play-buttons">
+                    <button class="quick-btn" onclick="quickJoinRandom()">
+                        <i class="fas fa-random"></i>
+                        انضمام عشوائي
+                    </button>
+                    <button class="quick-btn" onclick="openTutorial()">
+                        <i class="fas fa-question-circle"></i>
+                        شرح اللعبة
+                    </button>
+                </div>
+            </section>
+
+            <!-- إحصائيات مباشرة -->
+            <section class="online-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="online-count">---</span>
+                    <span class="stat-label">متصل الآن</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="games-count">---</span>
+                    <span class="stat-label">جارية الآن</span>
+                </div>
+            </section>
         </div>
-        <div class="player-info">
-          <span class="player-name-label">اسم اللاعب</span>
-          <h3 id="player-name-display">لاعب</h3>
-        </div>
-        <button id="edit-name-btn" class="edit-name-btn" title="تعديل الاسم"><i class="fas fa-edit"></i></button>
-      </section>
+    </main>
 
-      <section class="menu-buttons-modern">
-        <button id="create-room-btn" class="menu-btn primary-btn">إنشاء غرفة</button>
-        <button id="join-room-btn" class="menu-btn secondary-btn">الانضمام إلى غرفة</button>
-        <button id="single-player-btn" class="menu-btn outline-btn">اللاعب الواحد</button>
-      </section>
-
-      <section class="quick-play-section">
-        <div class="section-label">تشغيل سريع</div>
-        <div class="quick-play-buttons">
-          <button class="quick-btn" onclick="quickJoinRandom()">انضم عشوائياً</button>
-          <button class="quick-btn" onclick="openTutorial()">شرح</button>
-        </div>
-      </section>
-
-      <section class="online-stats">
-        <div class="stat-item">
-          <span class="stat-value" id="online-count">--</span>
-          <span class="stat-label">متصل الآن</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-value" id="games-count">--</span>
-          <span class="stat-label">ألعاب</span>
-        </div>
-      </section>
-    </div>
-  </main>
-
-  <!-- LOBBY SCREEN -->
-  <section id="lobby-screen" class="screen lobby-screen hidden">
-    <header class="lobby-header">
-      <button class="back-btn" onclick="goBack()"><i class="fas fa-arrow-right"></i></button>
-      <h2>الغرفة</h2>
-      <button class="settings-btn" onclick="showSettings()"><i class="fas fa-gear"></i></button>
-    </header>
-
-    <div class="room-code-card">
-      <div class="code-label">رمز الغرفة</div>
-      <div class="code-display" id="room-code">----</div>
-      <button class="copy-code-btn" onclick="copyRoomCode()"><i class="fas fa-copy"></i></button>
-    </div>
-
-    <div class="qr-share-section">
-      <div id="qr-code-container" class="qr-preview">
-        <canvas id="qr-code"></canvas>
-      </div>
-      <div class="qr-hint">امسح الرمز أو شارك الرابط</div>
-    </div>
-
-    <div class="players-grid" id="players-grid">
-      <!-- بطاقات اللاعبين تُملأ ديناميكياً -->
-    </div>
-
-    <footer class="lobby-footer">
-      <button id="start-game-btn" class="start-btn disabled" disabled>ابدأ اللعبة</button>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-        <div class="player-count" id="player-count">0/4</div>
-        <div class="invite-options">
-          <button class="invite-btn" title="مشاركة" onclick="shareInvite()"><i class="fas fa-share-alt"></i></button>
-          <button class="invite-btn" title="نسخ" onclick="copyRoomCode()"><i class="fas fa-link"></i></button>
-        </div>
-      </div>
-    </footer>
-  </section>
-
-  <!-- GAME SCREEN -->
-  <section id="game-screen" class="screen game-screen hidden">
-    <header class="game-header-modern">
-      <div class="round-info">
-        <div class="round-badge">الجولة <span id="round-number">1</span></div>
-        <div class="category-badge">الفواكه</div>
-      </div>
-
-      <div class="timer-circle">
-        <svg viewBox="0 0 100 100">
-          <circle class="timer-bg" cx="50" cy="50" r="45"></circle>
-          <circle id="timer-progress" class="timer-progress" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="0"></circle>
-        </svg>
-        <div class="timer-text">
-          <div id="game-timer">60</div>
-        </div>
-      </div>
-
-      <button class="menu-dots-btn" onclick="showGameMenu()"><i class="fas fa-ellipsis-v"></i></button>
-    </header>
-
-    <div class="game-area">
-      <div class="cards-section">
-        <div class="section-header">
-          <div class="cards-counter">بطاقات <span id="cards-count">0/4</span></div>
-          <div>
-            <button id="done-button" class="win-button disabled" disabled>
-              <div class="win-button-inner">لقد جمعت 4؟</div>
-              <div class="win-button-glow"></div>
+    <!-- شاشة الغرفة (Lobby) -->
+    <section id="lobby-screen" class="screen lobby-screen hidden">
+        <header class="lobby-header">
+            <button class="back-btn" onclick="goBack()" title="رجوع">
+                <i class="fas fa-arrow-right"></i>
             </button>
-          </div>
+            <h2>غرفة الانتظار</h2>
+            <button class="settings-btn" onclick="showSettings()" title="الإعدادات">
+                <i class="fas fa-cog"></i>
+            </button>
+        </header>
+
+        <!-- رمز الغرفة -->
+        <div class="room-code-card">
+            <span class="code-label">رمز الغرفة</span>
+            <span class="code-display" id="room-code">----</span>
+            <button class="copy-code-btn" onclick="copyRoomCode()" title="نسخ الرمز">
+                <i class="fas fa-copy"></i>
+            </button>
         </div>
 
-        <div id="cards-container" class="cards-grid">
-          <!-- بطاقات اللاعب تُعرض هنا -->
+        <!-- رمز QR للمشاركة -->
+        <div class="qr-share-section">
+            <div id="qr-code-container" class="qr-preview">
+                <canvas id="qr-code"></canvas>
+            </div>
+            <div class="qr-hint">
+                <i class="fas fa-camera"></i>
+                امسح الرمز للانضمام
+            </div>
         </div>
-      </div>
 
-      <div class="players-progress" id="players-progress">
-        <!-- تقدم اللاعبين -->
-      </div>
+        <!-- قائمة اللاعبين -->
+        <div class="players-grid" id="players-grid">
+            <!-- تضاف البطاقات هنا ديناميكياً -->
+        </div>
+
+        <!-- تذييل الغرفة -->
+        <footer class="lobby-footer">
+            <button id="start-game-btn" class="start-btn disabled" disabled>
+                <span>🚀 ابدأ اللعبة</span>
+            </button>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="player-count" id="player-count">0/4</div>
+                
+                <div class="invite-options">
+                    <button class="invite-btn" onclick="shareInvite()" title="مشاركة">
+                        <i class="fas fa-share-alt"></i>
+                    </button>
+                    <button class="invite-btn" onclick="copyRoomCode()" title="نسخ الرمز">
+                        <i class="fas fa-link"></i>
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </section>
+
+    <!-- شاشة اللعب الرئيسية -->
+    <section id="game-screen" class="screen game-screen hidden">
+        <header class="game-header-modern">
+            <div class="round-info">
+                <div class="round-badge">
+                    <i class="fas fa-trophy"></i>
+                    الجولة <span id="round-number">1</span>
+                </div>
+                <div class="category-badge">
+                    <i class="fas fa-apple-alt"></i>
+                    فواكه
+                </div>
+            </div>
+
+            <!-- مؤقت دائري -->
+            <div class="timer-circle">
+                <svg viewBox="0 0 100 100">
+                    <circle class="timer-bg" cx="50" cy="50" r="45"></circle>
+                    <circle id="timer-progress" class="timer-progress" 
+                            cx="50" cy="50" r="45" 
+                            stroke-dasharray="283" 
+                            stroke-dashoffset="0"></circle>
+                </svg>
+                <div class="timer-text">
+                    <span id="game-timer">60</span>
+                </div>
+            </div>
+
+            <button class="menu-dots-btn" onclick="showGameMenu()" title="القائمة">
+                <i class="fas fa-ellipsis-v"></i>
+            </button>
+        </header>
+
+        <div class="game-area">
+            <!-- منطقة البطاقات -->
+            <section class="cards-section">
+                <div class="section-header">
+                    <div class="cards-counter">
+                        <i class="fas fa-layer-group"></i>
+                        <span id="cards-count">0/4</span>
+                    </div>
+                    
+                    <button id="done-button" class="win-button disabled" disabled>
+                        <div class="win-button-inner">
+                            <i class="fas fa-check-circle"></i>
+                            لقد جمعت 4!
+                        </div>
+                        <div class="win-button-glow"></div>
+                    </button>
+                </div>
+
+                <!-- شبكة البطاقات -->
+                <div id="cards-container" class="cards-grid">
+                    <!-- تضاف البطاقات هنا ديناميكياً -->
+                </div>
+            </section>
+
+            <!-- تقدم اللاعبين الآخرين -->
+            <div id="players-progress" class="players-progress">
+                <!-- تضاف هنا ديناميكياً -->
+            </div>
+        </div>
+    </section>
+
+    <!-- نافذة النتيجة المنبثقة -->
+    <div id="result-modal" class="modern-modal hidden">
+        <div class="confetti"></div>
+        
+        <div class="winner-avatar">
+            <img id="winner-avatar-img" src="" alt="الفائز" loading="lazy">
+        </div>
+        
+        <h2 id="result-title" class="winner-title">🎉 فائز!</h2>
+        <p id="result-message" class="winner-message">تفاصيل النتيجة</p>
+
+        <div class="winner-stats">
+            <div class="winner-stat">
+                <span class="stat-value" id="round-time">--</span>
+                <span class="stat-label">الزمن</span>
+            </div>
+            <div class="winner-stat">
+                <span class="stat-value" id="win-streak">0</span>
+                <span class="stat-label">فوز متتالي</span>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button id="next-round-btn" class="modal-btn primary">
+                <i class="fas fa-forward"></i>
+                الجولة التالية
+            </button>
+            <button id="end-game-btn" class="modal-btn secondary">
+                <i class="fas fa-home"></i>
+                العودة للقائمة
+            </button>
+        </div>
     </div>
-  </section>
 
-  <!-- RESULT MODAL -->
-  <div id="result-modal" class="modern-modal hidden" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9998;">
-    <div class="winner-avatar">
-      <img id="winner-avatar-img" src="" alt="winner" style="width:100%;height:100%;object-fit:cover;">
-    </div>
-    <h2 id="result-title" class="winner-title">🎉 فائز!</h2>
-    <p id="result-message" class="winner-message">تفاصيل النتيجة</p>
+    <!-- القائمة الجانبية -->
+    <aside id="side-menu" class="side-menu hidden">
+        <div class="side-menu-header">
+            <div class="close-menu">
+                <i class="fas fa-times" onclick="closeSideMenu()"></i>
+            </div>
+            
+            <div class="menu-profile">
+                <img id="side-avatar" src="" alt="صورتك الشخصية" loading="lazy">
+                <div id="menu-player-name">لاعب</div>
+            </div>
+        </div>
 
-    <div class="winner-stats">
-      <div class="winner-stat">
-        <span class="stat-value" id="round-time">--</span>
-        <span class="stat-label">الزمن</span>
-      </div>
-      <div class="winner-stat">
-        <span class="stat-value" id="win-streak">0</span>
-        <span class="stat-label">فوز متتالي</span>
-      </div>
-    </div>
+        <div class="side-menu-items">
+            <button class="menu-item" onclick="showHowToPlay()">
+                <i class="fas fa-question-circle"></i>
+                كيفية اللعب
+            </button>
+            
+            <button class="menu-item" onclick="showStats()">
+                <i class="fas fa-chart-bar"></i>
+                إحصائياتي
+            </button>
+            
+            <button class="menu-item" onclick="shareApp()">
+                <i class="fas fa-share-alt"></i>
+                شارك التطبيق
+            </button>
+            
+            <button class="menu-item danger" onclick="leaveGame()">
+                <i class="fas fa-sign-out-alt"></i>
+                خروج من الغرفة
+            </button>
+        </div>
 
-    <div class="modal-actions">
-      <button id="next-round-btn" class="modal-btn primary">الجولة التالية</button>
-      <button id="end-game-btn" class="modal-btn secondary">إنهاء اللعبة</button>
-    </div>
-  </div>
+        <div class="side-menu-footer">
+            <span>Fruit Clash v1.0.0</span>
+            <span style="display: block; font-size: 0.8rem; margin-top: 5px;">
+                جميع الحقوق محفوظة © 2024
+            </span>
+        </div>
+    </aside>
 
-  <!-- SIDE MENU -->
-  <aside id="side-menu" class="side-menu hidden">
-    <div class="side-menu-header">
-      <div class="close-menu"><i class="fas fa-times" onclick="closeSideMenu()"></i></div>
-      <div class="menu-profile">
-        <img id="side-avatar" src="" alt="avatar">
-        <div id="menu-player-name">لاعب</div>
-      </div>
-    </div>
-    <div class="side-menu-items">
-      <button class="menu-item" onclick="showHowToPlay()"><i class="fas fa-question-circle"></i> كيفية اللعب</button>
-      <button class="menu-item" onclick="showStats()"><i class="fas fa-chart-bar"></i> إحصائياتي</button>
-      <button class="menu-item" onclick="shareApp()"><i class="fas fa-share"></i> مشاركة التطبيق</button>
-      <button class="menu-item danger" onclick="leaveGame()"><i class="fas fa-sign-out-alt"></i> الخروج</button>
-    </div>
-    <div class="side-menu-footer">نسخة تجريبية</div>
-  </aside>
-
-  <!-- SCRIPTS -->
-  <script src="game-modern.js"></script>
-  <script>
-    // تهيئة كائن اللعبة عند تحميل الصفحة
-    window.addEventListener('DOMContentLoaded', () => {
-      try {
-        window.game = new ModernGame();
-
-        // مزامنة صور الرموز في الواجهة مع الحالة
-        const avatarEls = document.querySelectorAll('#menu-avatar, #side-avatar, .player-avatar img');
-        avatarEls.forEach(img => {
-          if (img && window.game?.state?.avatar) img.src = window.game.state.avatar;
+    <!-- سكريبت اللعبة الرئيسي -->
+    <script src="game-modern.js"></script>
+    
+    <script>
+        // تهيئة اللعبة عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                // تهيئة كائن اللعبة العام
+                window.game = new ModernGame();
+                
+                // تحديث الصور الرمزية
+                const avatarSrc = window.game.state.avatar;
+                document.querySelectorAll('.player-avatar img, #menu-avatar, #side-avatar').forEach(img => {
+                    if (img) img.src = avatarSrc;
+                });
+                
+                // التحقق من وجود رمز غرفة في الرابط
+                const urlParams = new URLSearchParams(window.location.search);
+                const joinCode = urlParams.get('join');
+                
+                if (joinCode) {
+                    // تأخير بسيط لضمان تحميل كل شيء
+                    setTimeout(() => {
+                        window.game.joinRoom(joinCode.toUpperCase());
+                    }, 500);
+                }
+                
+                console.log('✅ تم تهيئة اللعبة بنجاح');
+                
+            } catch (error) {
+                console.error('❌ خطأ في تهيئة اللعبة:', error);
+                
+                // عرض رسالة خطأ للمستخدم
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = `
+                    position: fixed;
+                    bottom: 20px;
+                    left: 20px;
+                    right: 20px;
+                    background: var(--danger);
+                    color: white;
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                    z-index: 9999;
+                `;
+                errorDiv.textContent = 'عذراً، حدث خطأ في تحميل اللعبة. يرجى تحديث الصفحة.';
+                document.body.appendChild(errorDiv);
+            }
         });
 
-        // إذا كان رابط الانضمام موجود في الـ URL، حاول الانضمام تلقائياً
-        const params = new URLSearchParams(window.location.search);
-        const join = params.get('join');
-        if (join) {
-          setTimeout(() => {
-            window.game.joinRoom(join.toUpperCase());
-          }, 600);
-        }
-      } catch (e) {
-        console.error('تعذر تهيئة اللعبة:', e);
-      }
-    });
-  </script>
+        // منع القوائم الافتراضية على الجوال
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('selectstart', e => e.preventDefault());
+    </script>
 </body>
 </html>
