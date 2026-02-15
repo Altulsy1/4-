@@ -573,6 +573,259 @@ class ModernGame {
       container.appendChild(el);
     });
   }
+  // في constructor، أضف هذه الخاصية
+constructor() {
+    // ... الخصائص الموجودة ...
+    
+    // إضافة خاصية للتحكم بعدم الفوز التلقائي
+    this.gameStarted = false;
+    this.canClaimWin = false; // منع المطالبة بالفور فور توزيع البطاقات
+    
+    // ... باقي الكود ...
+}
+
+// تحديث دالة initializeRound
+initializeRound() {
+    this.state.gameData.gameActive = true;
+    this.state.gameData.roundWinner = null;
+    this.state.gameData.currentRound = this.state.gameData.currentRound || 1;
+    this.state.gameData.startTime = Date.now();
+    
+    // إعادة تعيين حالة اللعبة
+    this.gameStarted = true;
+    this.canClaimWin = false; // منع الفوز الفوري
+    
+    this.dealCards();
+    
+    // تأخير السماح بالمطالبة بالفوز لثانيتين
+    setTimeout(() => {
+        if (this.state.gameData.gameActive) {
+            this.canClaimWin = true;
+            console.log('✅ يمكن الآن المطالبة بالفوز');
+        }
+    }, 2000);
+    
+    this.startTimer(this.state.gameData.roundTime);
+    this.updateGameUI();
+}
+
+// تحديث دالة dealCards لمنع الفوز التلقائي
+dealCards() {
+    const allCards = [];
+    const timestamp = Date.now();
+
+    // التأكد من عدم وجود 4 بطاقات متطابقة لأي لاعب
+    let hasFourOfAKind = true;
+    let attempts = 0;
+    const maxAttempts = 10; // حد أقصى للمحاولات لتجنب الحلقة اللانهائية
+
+    while (hasFourOfAKind && attempts < maxAttempts) {
+        attempts++;
+        allCards.length = 0; // تفريغ المصفوفة
+        
+        // إنشاء 16 بطاقة
+        for (let i = 0; i < 16; i++) {
+            const fruitIndex = Math.floor(Math.random() * this.state.gameData.fruits.length);
+            const emoji = this.state.gameData.fruits[fruitIndex];
+            allCards.push({
+                id: `card-${i}-${timestamp}-${attempts}`,
+                emoji: emoji,
+                name: this.fruitsNames[emoji] || 'فاكهة',
+                fruitId: fruitIndex
+            });
+        }
+
+        // خلط البطاقات
+        this.shuffleArray(allCards);
+
+        // التحقق من عدم وجود 4 متطابقة لأي لاعب
+        hasFourOfAKind = false;
+        
+        // توزيع مؤقت للتحقق
+        const allPlayerIds = [this.state.playerId, ...this.aiPlayers.map(ai => ai.id)];
+        const tempCards = {};
+        
+        allPlayerIds.forEach((playerId, index) => {
+            const startIdx = index * 4;
+            const endIdx = startIdx + 4;
+            tempCards[playerId] = allCards.slice(startIdx, endIdx);
+        });
+        
+        // التحقق من كل لاعب
+        for (let playerId in tempCards) {
+            const counts = {};
+            tempCards[playerId].forEach(card => {
+                counts[card.emoji] = (counts[card.emoji] || 0) + 1;
+            });
+            
+            if (Object.values(counts).some(count => count >= 4)) {
+                hasFourOfAKind = true;
+                break;
+            }
+        }
+    }
+
+    console.log(`تم توزيع البطاقات بعد ${attempts} محاولة`);
+
+    // التوزيع النهائي
+    const allPlayerIds = [this.state.playerId, ...this.aiPlayers.map(ai => ai.id)];
+    
+    allPlayerIds.forEach((playerId, index) => {
+        const startIdx = index * 4;
+        const endIdx = startIdx + 4;
+        const playerCards = allCards.slice(startIdx, endIdx);
+        
+        this.state.gameData.playersCards[playerId] = playerCards;
+
+        // عرض بطاقات اللاعب الحقيقي فقط
+        if (playerId === this.state.playerId) {
+            this.displayMyCards(playerCards);
+        }
+    });
+
+    // عرض تقدم جميع اللاعبين
+    this.displayPlayersProgress();
+    
+    // بدء تفكير الذكاء الاصطناعي
+    if (this.gameMode === 'single') {
+        this.startAIThinking();
+    }
+}
+
+// تحديث دالة claimWin
+claimWin() {
+    // التحقق من إمكانية المطالبة بالفوز
+    if (!this.canClaimWin) {
+        this.showNotification('⏳ انتظر قليلاً قبل المطالبة بالفوز', 'warning');
+        return;
+    }
+    
+    if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) {
+        return;
+    }
+
+    // التحقق من امتلاك اللاعب 4 بطاقات متطابقة
+    const myCards = this.state.gameData.playersCards[this.state.playerId];
+    const counts = {};
+    myCards.forEach(card => {
+        counts[card.emoji] = (counts[card.emoji] || 0) + 1;
+    });
+    
+    const hasFour = Object.values(counts).some(count => count >= 4);
+    
+    if (!hasFour) {
+        this.showNotification('❌ ليس لديك 4 بطاقات متطابقة', 'error');
+        return;
+    }
+
+    this.triggerHaptic('heavy');
+    this.launchConfetti();
+    this.handleWin(this.state.playerId);
+}
+
+// إضافة دالة تمرير البطاقات (Swap Cards)
+swapCard(cardId, direction) {
+    if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) {
+        this.showNotification('اللعبة غير نشطة', 'error');
+        return;
+    }
+    
+    const myCards = this.state.gameData.playersCards[this.state.playerId];
+    const cardIndex = myCards.findIndex(c => c.id === cardId);
+    
+    if (cardIndex === -1) return;
+    
+    // محاكاة تبديل بطاقة (في الوضع الحقيقي، يتم التبادل مع لاعب آخر)
+    if (direction === 'left' && cardIndex > 0) {
+        // تبديل مع البطاقة التي على اليسار
+        [myCards[cardIndex], myCards[cardIndex - 1]] = [myCards[cardIndex - 1], myCards[cardIndex]];
+    } else if (direction === 'right' && cardIndex < myCards.length - 1) {
+        // تبديل مع البطاقة التي على اليمين
+        [myCards[cardIndex], myCards[cardIndex + 1]] = [myCards[cardIndex + 1], myCards[cardIndex]];
+    } else if (direction === 'deck') {
+        // تبديل مع بطاقة جديدة من الرزمة (محاكاة)
+        const newCard = this.drawFromDeck();
+        if (newCard) {
+            myCards[cardIndex] = newCard;
+        }
+    }
+    
+    // تحديث العرض
+    this.displayMyCards(myCards);
+    this.checkForFourOfAKind(myCards);
+    this.displayPlayersProgress();
+    
+    // إظهار إشعار
+    this.showNotification('🔄 تم تبديل البطاقات', 'success');
+}
+
+// دالة سحب بطاقة جديدة من الرزمة (محاكاة)
+drawFromDeck() {
+    const fruits = this.state.gameData.fruits;
+    const randomFruit = fruits[Math.floor(Math.random() * fruits.length)];
+    
+    return {
+        id: `new-card-${Date.now()}-${Math.random()}`,
+        emoji: randomFruit,
+        name: this.fruitsNames[randomFruit] || 'فاكهة',
+        fruitId: fruits.indexOf(randomFruit)
+    };
+}
+
+// تحديث دالة displayMyCards لإضافة أزرار التمرير
+displayMyCards(cards) {
+    const container = this.getElement('cards-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    cards.forEach((card, index) => {
+        const cardEl = document.createElement('div');
+        cardEl.className = 'modern-card';
+        cardEl.style.animationDelay = `${index * 0.1}s`;
+        
+        // إضافة أزرار التمرير
+        cardEl.innerHTML = `
+            <div class="card-actions">
+                ${index > 0 ? '<button class="card-action-btn left" onclick="window.game?.swapCard(\'' + card.id + '\', \'left\')">←</button>' : ''}
+                ${index < cards.length - 1 ? '<button class="card-action-btn right" onclick="window.game?.swapCard(\'' + card.id + '\', \'right\')">→</button>' : ''}
+                <button class="card-action-btn deck" onclick="window.game?.swapCard(\'' + card.id + '\', \'deck\')">🔄</button>
+            </div>
+            <div class="card-emoji">${card.emoji}</div>
+            <div class="card-name">${card.name}</div>
+            <div class="card-index">${index + 1}</div>
+        `;
+        
+        cardEl.addEventListener('click', (e) => {
+            // منع النقر إذا كان على زر
+            if (e.target.tagName === 'BUTTON') return;
+            this.onCardClick(card);
+        });
+        
+        container.appendChild(cardEl);
+    });
+
+    this.updateCardsCount(cards.length);
+    
+    // التحقق من البطاقات المتطابقة ولكن لا تظهر إشعار فوري
+    const counts = {};
+    cards.forEach(card => {
+        counts[card.emoji] = (counts[card.emoji] || 0) + 1;
+    });
+    
+    const hasFour = Object.values(counts).some(count => count >= 4);
+    const winButton = this.getElement('done-button');
+    
+    if (winButton) {
+        if (hasFour && this.canClaimWin) {
+            winButton.classList.remove('disabled');
+            winButton.disabled = false;
+        } else {
+            winButton.classList.add('disabled');
+            winButton.disabled = true;
+        }
+    }
+}
 
   getMaxSameCards(cards) {
     const counts = {};
