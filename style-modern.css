@@ -1,4 +1,4 @@
-/* style-modern.css - تصميم 2025 عصري متكامل */
+/* style-modern.css - تصميم عصري محسن بالكامل */
 
 :root {
     --primary: #6C5CE7;
@@ -9,118 +9,71 @@
     --warning: #FDCB6E;
     --dark: #2D3436;
     --light: #F5F6FA;
-    --gradient: linear-gradient(135deg, #6C5CE7 0%, #00D2FF 100%);
-    --shadow: 0 10px 40px rgba(108, 92, 231, 0.2);
-    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.15);
+    --gray: #95A5A6;
+    --gradient: linear-gradient(135deg, #6C5CE7, #00D2FF);
+    --gradient-danger: linear-gradient(135deg, #FF7675, #FF6B6B);
+    --gradient-success: linear-gradient(135deg, #00B894, #00D2FF);
+    --shadow-sm: 0 5px 15px rgba(0, 0, 0, 0.05);
+    --shadow: 0 10px 30px rgba(108, 92, 231, 0.15);
+    --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.1);
+    --radius-sm: 12px;
+    --radius: 20px;
+    --radius-lg: 30px;
+    --transition: all 0.3s ease;
 }
 
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Cairo', sans-serif;
+    font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
     -webkit-tap-highlight-color: transparent;
 }
 
 body {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #667eea, #764ba2);
     min-height: 100vh;
     display: flex;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
     overflow-x: hidden;
 }
 
-/* شاشة التحميل المتحركة */
-.splash-screen {
-    background: linear-gradient(135deg, #6C5CE7, #00D2FF);
+/* شاشات اللعبة */
+.screen {
+    width: 100%;
+    max-width: 500px;
+    min-height: 100vh;
+    background: var(--light);
+    position: relative;
+    display: block;
 }
 
-.splash-content {
-    text-align: center;
-    animation: fadeInUp 1s ease;
-}
-
-.logo-animation {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    margin-bottom: 30px;
-}
-
-.fruit-icon {
-    font-size: 4rem;
-    animation: bounce 2s infinite;
-    transform-origin: center;
-}
-
-.fruit-icon:nth-child(1) { animation-delay: 0s; }
-.fruit-icon:nth-child(2) { animation-delay: 0.2s; }
-.fruit-icon:nth-child(3) { animation-delay: 0.4s; }
-.fruit-icon:nth-child(4) { animation-delay: 0.6s; }
-
-@keyframes bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-20px); }
-}
-
-.game-title {
-    font-size: 3rem;
-    font-weight: 900;
-    color: white;
-    text-shadow: 0 5px 20px rgba(0,0,0,0.2);
-    letter-spacing: 3px;
-    margin-bottom: 10px;
-}
-
-.game-subtitle {
-    color: rgba(255,255,255,0.9);
-    font-size: 1.1rem;
-    margin-bottom: 30px;
-}
-
-.modern-loader {
-    width: 200px;
-    height: 4px;
-    background: rgba(255,255,255,0.3);
-    border-radius: 10px;
-    margin: 20px auto;
-    overflow: hidden;
-}
-
-.loader-bar {
-    height: 100%;
-    width: 30%;
-    background: white;
-    border-radius: 10px;
-    animation: loading 1.5s infinite ease-in-out;
-}
-
-@keyframes loading {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(400%); }
+.screen.hidden {
+    display: none !important;
 }
 
 /* القائمة الرئيسية */
 .menu-screen {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #667eea, #764ba2);
     position: relative;
-    overflow: hidden;
+    overflow-y: auto;
 }
 
 .menu-bg-pattern {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: radial-gradient(circle at 30% 50%, rgba(255,255,255,0.1) 0%, transparent 50%);
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.1) 0%, transparent 50%);
     animation: moveBackground 20s linear infinite;
+    pointer-events: none;
 }
 
 @keyframes moveBackground {
     0% { transform: scale(1) rotate(0deg); }
-    50% { transform: scale(1.2) rotate(5deg); }
+    50% { transform: scale(1.1) rotate(2deg); }
     100% { transform: scale(1) rotate(0deg); }
 }
 
@@ -128,8 +81,6 @@ body {
     position: relative;
     z-index: 2;
     padding: 20px;
-    max-width: 400px;
-    margin: 0 auto;
     animation: slideUp 0.5s ease;
 }
 
@@ -139,45 +90,56 @@ body {
 }
 
 .menu-title {
-    font-size: 2.5rem;
+    font-size: 2.8rem;
     font-weight: 900;
     color: white;
-    text-shadow: 0 5px 20px rgba(0,0,0,0.3);
+    text-shadow: 0 5px 20px rgba(0,0,0,0.2);
     margin-bottom: 5px;
+    letter-spacing: 2px;
 }
 
 .menu-version {
-    color: rgba(255,255,255,0.7);
+    color: rgba(255,255,255,0.8);
     font-size: 0.9rem;
+    background: rgba(255,255,255,0.1);
+    display: inline-block;
+    padding: 5px 15px;
+    border-radius: 20px;
 }
 
 /* بروفايل اللاعب */
 .player-profile-card {
     background: rgba(255,255,255,0.15);
     backdrop-filter: blur(10px);
-    border-radius: 20px;
+    border-radius: var(--radius);
     padding: 15px;
     margin-bottom: 30px;
     display: flex;
     align-items: center;
     gap: 15px;
     border: 1px solid rgba(255,255,255,0.2);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow);
 }
 
 .player-avatar {
-    width: 60px;
-    height: 60px;
+    width: 70px;
+    height: 70px;
     border-radius: 50%;
     overflow: hidden;
     border: 3px solid white;
     box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    background: white;
 }
 
 .player-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.player-avatar.large {
+    width: 90px;
+    height: 90px;
 }
 
 .player-info {
@@ -188,24 +150,25 @@ body {
     font-size: 0.8rem;
     color: rgba(255,255,255,0.8);
     display: block;
+    margin-bottom: 2px;
 }
 
 .player-info h3 {
     color: white;
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     font-weight: 700;
 }
 
 .edit-name-btn {
-    background: rgba(255,255,255,0.2);
+    width: 45px;
+    height: 45px;
     border: none;
-    width: 40px;
-    height: 40px;
+    background: rgba(255,255,255,0.2);
     border-radius: 50%;
     color: white;
-    font-size: 1rem;
+    font-size: 1.2rem;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: var(--transition);
 }
 
 .edit-name-btn:hover {
@@ -213,7 +176,7 @@ body {
     transform: scale(1.1);
 }
 
-/* أزرار القائمة الحديثة */
+/* أزرار القائمة */
 .menu-buttons-modern {
     display: flex;
     flex-direction: column;
@@ -224,7 +187,7 @@ body {
 .menu-btn {
     padding: 18px;
     border: none;
-    border-radius: 15px;
+    border-radius: var(--radius);
     font-size: 1.1rem;
     font-weight: 700;
     display: flex;
@@ -232,7 +195,7 @@ body {
     justify-content: center;
     gap: 10px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: var(--transition);
     position: relative;
     overflow: hidden;
 }
@@ -254,7 +217,6 @@ body {
 
 .secondary-btn {
     background: rgba(255,255,255,0.15);
-    backdrop-filter: blur(10px);
     color: white;
     border: 1px solid rgba(255,255,255,0.3);
 }
@@ -274,29 +236,7 @@ body {
     color: var(--primary);
 }
 
-.glow-effect::after {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-.glow-effect:hover::after {
-    opacity: 1;
-    animation: rotate 4s linear infinite;
-}
-
-@keyframes rotate {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-/* قسم اللعب السريع */
+/* قسم التشغيل السريع */
 .quick-play-section {
     margin-bottom: 30px;
 }
@@ -306,6 +246,7 @@ body {
     text-align: center;
     margin-bottom: 15px;
     font-size: 0.9rem;
+    letter-spacing: 1px;
 }
 
 .quick-play-buttons {
@@ -322,10 +263,7 @@ body {
     color: white;
     font-size: 1rem;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.3s;
+    transition: var(--transition);
 }
 
 .quick-btn:hover {
@@ -339,8 +277,9 @@ body {
     justify-content: center;
     gap: 40px;
     background: rgba(0,0,0,0.2);
-    border-radius: 20px;
+    border-radius: var(--radius);
     padding: 20px;
+    backdrop-filter: blur(5px);
 }
 
 .stat-item {
@@ -349,9 +288,10 @@ body {
 
 .stat-value {
     display: block;
-    font-size: 1.5rem;
-    font-weight: 700;
+    font-size: 2rem;
+    font-weight: 800;
     color: white;
+    line-height: 1.2;
 }
 
 .stat-label {
@@ -359,9 +299,9 @@ body {
     font-size: 0.9rem;
 }
 
-/* شاشة الغرفة - تصميم كروت */
+/* شاشة الغرفة */
 .lobby-screen {
-    background: #F5F6FA;
+    background: var(--light);
 }
 
 .lobby-header {
@@ -370,41 +310,44 @@ body {
     align-items: center;
     padding: 20px;
     background: white;
-    border-radius: 0 0 30px 30px;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    box-shadow: var(--shadow-sm);
 }
 
 .back-btn, .settings-btn {
-    width: 40px;
-    height: 40px;
+    width: 45px;
+    height: 45px;
     border: none;
-    background: #F0F0F0;
-    border-radius: 12px;
+    background: var(--light);
+    border-radius: var(--radius-sm);
     color: var(--dark);
+    font-size: 1.2rem;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: var(--transition);
 }
 
 .back-btn:hover, .settings-btn:hover {
-    background: #E0E0E0;
+    background: var(--gray);
+    color: white;
     transform: scale(1.05);
 }
 
 .lobby-header h2 {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     color: var(--dark);
+    font-weight: 700;
 }
 
-/* كارت رمز الغرفة */
+/* بطاقة رمز الغرفة */
 .room-code-card {
     background: white;
     margin: 20px;
     padding: 20px;
-    border-radius: 20px;
+    border-radius: var(--radius);
     display: flex;
     align-items: center;
     gap: 15px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+    box-shadow: var(--shadow-sm);
     position: relative;
     overflow: hidden;
 }
@@ -413,14 +356,14 @@ body {
     content: '';
     position: absolute;
     top: 0;
-    left: 0;
+    right: 0;
     width: 5px;
     height: 100%;
     background: var(--gradient);
 }
 
 .code-label {
-    color: #999;
+    color: var(--gray);
     font-size: 0.9rem;
 }
 
@@ -432,25 +375,27 @@ body {
     color: var(--primary);
     direction: ltr;
     text-align: left;
+    font-family: monospace;
 }
 
 .copy-code-btn {
-    width: 45px;
-    height: 45px;
+    width: 50px;
+    height: 50px;
     border: none;
     background: var(--primary);
     color: white;
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
+    font-size: 1.2rem;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: var(--transition);
 }
 
 .copy-code-btn:hover {
-    transform: scale(1.1);
     background: var(--primary-dark);
+    transform: scale(1.1);
 }
 
-/* QR Code */
+/* قسم QR */
 .qr-share-section {
     text-align: center;
     margin: 20px;
@@ -459,18 +404,19 @@ body {
 .qr-preview {
     background: white;
     padding: 15px;
-    border-radius: 20px;
+    border-radius: var(--radius);
     display: inline-block;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow);
 }
 
 .qr-preview canvas {
     width: 150px;
     height: 150px;
+    display: block;
 }
 
 .qr-hint {
-    color: #999;
+    color: var(--gray);
     margin-top: 10px;
     font-size: 0.9rem;
 }
@@ -481,16 +427,16 @@ body {
     grid-template-columns: repeat(2, 1fr);
     gap: 15px;
     padding: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 90px;
 }
 
 .player-card {
     background: white;
-    border-radius: 20px;
+    border-radius: var(--radius);
     padding: 20px 10px;
     text-align: center;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-    transition: all 0.3s;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
     animation: cardPopIn 0.5s ease;
 }
 
@@ -506,47 +452,41 @@ body {
 }
 
 .player-card.host-card {
-    background: linear-gradient(135deg, #6C5CE7, #00D2FF);
+    background: var(--gradient);
     color: white;
 }
 
-.player-avatar.large {
-    width: 70px;
-    height: 70px;
-    margin: 0 auto 10px;
-    border: 3px solid white;
+.player-card.host-card .player-avatar {
+    border-color: var(--warning);
 }
 
 .player-name {
     font-weight: 700;
-    margin-bottom: 5px;
+    margin: 10px 0 5px;
 }
 
 .player-badge {
     font-size: 0.8rem;
-    padding: 3px 10px;
+    padding: 3px 12px;
     border-radius: 20px;
     display: inline-block;
-}
-
-.host-badge {
-    background: rgba(255,255,255,0.3);
-    color: white;
+    background: rgba(255,255,255,0.2);
 }
 
 .empty-card {
-    background: #F5F5F5;
-    border: 2px dashed #DDD;
+    background: #f8f9fa;
+    border: 2px dashed #dee2e6;
+    opacity: 0.7;
 }
 
 .empty-icon {
-    font-size: 2rem;
-    color: #CCC;
+    font-size: 2.5rem;
+    color: var(--gray);
     margin-bottom: 5px;
 }
 
 .empty-text {
-    color: #AAA;
+    color: var(--gray);
     font-size: 0.9rem;
 }
 
@@ -556,9 +496,11 @@ body {
     bottom: 0;
     left: 0;
     right: 0;
+    max-width: 500px;
+    margin: 0 auto;
     background: white;
     padding: 20px;
-    border-radius: 30px 30px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
 }
 
@@ -566,62 +508,65 @@ body {
     width: 100%;
     padding: 18px;
     border: none;
-    border-radius: 15px;
-    font-size: 1.1rem;
+    border-radius: var(--radius);
+    font-size: 1.2rem;
     font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: var(--transition);
     margin-bottom: 15px;
 }
 
 .start-btn:not(.disabled) {
-    background: var(--gradient);
+    background: var(--gradient-success);
     color: white;
-    box-shadow: 0 10px 30px rgba(108, 92, 231, 0.4);
+    box-shadow: 0 10px 30px rgba(0, 184, 148, 0.3);
+}
+
+.start-btn:not(.disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 40px rgba(0, 184, 148, 0.4);
 }
 
 .start-btn.disabled {
-    background: #EEE;
-    color: #AAA;
+    background: #e9ecef;
+    color: var(--gray);
     cursor: not-allowed;
 }
 
 .player-count {
-    background: rgba(255,255,255,0.2);
-    padding: 3px 10px;
+    background: var(--light);
+    padding: 5px 15px;
     border-radius: 20px;
     font-size: 0.9rem;
+    color: var(--dark);
 }
 
 .invite-options {
     display: flex;
-    justify-content: center;
-    gap: 15px;
+    gap: 10px;
 }
 
 .invite-btn {
     width: 45px;
     height: 45px;
     border: none;
-    background: #F0F0F0;
-    border-radius: 12px;
-    color: var(--dark);
+    background: var(--light);
+    border-radius: var(--radius-sm);
+    color: var(--primary);
+    font-size: 1.2rem;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: var(--transition);
 }
 
 .invite-btn:hover {
-    background: #E0E0E0;
+    background: var(--primary);
+    color: white;
     transform: translateY(-2px);
 }
 
-/* شاشة اللعب الرئيسية */
+/* شاشة اللعب */
 .game-screen {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #667eea, #764ba2);
 }
 
 .game-header-modern {
@@ -634,11 +579,25 @@ body {
     border-bottom: 1px solid rgba(255,255,255,0.2);
 }
 
+.round-info {
+    display: flex;
+    gap: 10px;
+}
+
+.round-badge, .category-badge {
+    background: rgba(255,255,255,0.15);
+    padding: 8px 15px;
+    border-radius: 25px;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
 /* مؤقت دائري */
 .timer-circle {
     position: relative;
-    width: 60px;
-    height: 60px;
+    width: 70px;
+    height: 70px;
 }
 
 .timer-circle svg {
@@ -659,7 +618,6 @@ body {
     stroke-width: 8;
     stroke-linecap: round;
     stroke-dasharray: 283;
-    stroke-dashoffset: 0;
     transition: stroke-dashoffset 1s linear;
 }
 
@@ -670,85 +628,34 @@ body {
     transform: translate(-50%, -50%);
     color: white;
     font-weight: 700;
-    font-size: 1.2rem;
+    font-size: 1.4rem;
 }
 
-/* معلومات الجولة */
-.round-info {
-    display: flex;
-    gap: 10px;
-}
-
-.round-badge, .category-badge {
-    background: rgba(255,255,255,0.15);
-    padding: 8px 15px;
-    border-radius: 25px;
-    color: white;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 5px;
+.timer-text.urgent {
+    color: var(--danger);
+    animation: pulse 0.5s infinite;
 }
 
 .menu-dots-btn {
-    width: 40px;
-    height: 40px;
+    width: 45px;
+    height: 45px;
     border: none;
     background: rgba(255,255,255,0.15);
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     color: white;
+    font-size: 1.2rem;
     cursor: pointer;
+    transition: var(--transition);
 }
 
-/* تقدم اللاعبين */
-.players-progress {
-    display: flex;
-    gap: 5px;
-    padding: 15px;
-    overflow-x: auto;
-    scrollbar-width: none;
+.menu-dots-btn:hover {
+    background: rgba(255,255,255,0.25);
 }
 
-.players-progress::-webkit-scrollbar {
-    display: none;
-}
-
-.player-progress-item {
-    flex: 1;
-    min-width: 80px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 15px;
-    padding: 10px 5px;
-    text-align: center;
-    color: white;
-    position: relative;
-    overflow: hidden;
-}
-
-.player-progress-item.winner {
-    background: gold;
-    color: var(--dark);
-    animation: winnerGlow 1s infinite;
-}
-
-@keyframes winnerGlow {
-    0%, 100% { box-shadow: 0 0 20px gold; }
-    50% { box-shadow: 0 0 40px gold; }
-}
-
-.progress-bar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    height: 3px;
-    background: white;
-    transition: width 0.3s ease;
-}
-
-/* منطقة البطاقات */
+/* منطقة اللعب */
 .game-area {
     padding: 20px;
-    height: calc(100vh - 140px);
+    height: calc(100vh - 120px);
     display: flex;
     flex-direction: column;
 }
@@ -757,7 +664,7 @@ body {
     flex: 1;
     background: rgba(255,255,255,0.1);
     backdrop-filter: blur(10px);
-    border-radius: 30px;
+    border-radius: var(--radius-lg);
     padding: 20px;
     margin-bottom: 20px;
     border: 1px solid rgba(255,255,255,0.2);
@@ -773,34 +680,34 @@ body {
 
 .cards-counter {
     background: rgba(255,255,255,0.2);
-    padding: 5px 15px;
-    border-radius: 20px;
+    padding: 8px 20px;
+    border-radius: 25px;
     font-weight: 600;
+    font-size: 1rem;
 }
 
+/* شبكة البطاقات */
 .cards-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 15px;
-    justify-items: center;
+    margin-bottom: 20px;
 }
 
-/* تصميم البطاقة العصري */
 .modern-card {
-    width: 100%;
-    aspect-ratio: 2/3;
     background: white;
-    border-radius: 20px;
-    padding: 15px 5px;
+    border-radius: var(--radius);
+    padding: 20px 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    box-shadow: var(--shadow);
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: var(--transition);
     position: relative;
     overflow: hidden;
+    aspect-ratio: 2/3;
 }
 
 .modern-card::before {
@@ -810,14 +717,14 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 100%);
+    background: linear-gradient(135deg, rgba(108,92,231,0.1), transparent);
     opacity: 0;
     transition: opacity 0.3s;
 }
 
 .modern-card:hover {
-    transform: translateY(-10px) rotate(2deg);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: var(--shadow-lg);
 }
 
 .modern-card:hover::before {
@@ -825,8 +732,8 @@ body {
 }
 
 .card-emoji {
-    font-size: 3rem;
-    margin-bottom: 5px;
+    font-size: 3.5rem;
+    margin-bottom: 10px;
     animation: float 3s infinite ease-in-out;
 }
 
@@ -839,23 +746,22 @@ body {
     font-size: 1rem;
     font-weight: 600;
     color: var(--dark);
+    text-align: center;
 }
 
-/* زر الفوز المتحرك */
+/* زر الفوز */
 .win-button {
     width: 100%;
-    padding: 0;
     border: none;
     background: none;
     cursor: pointer;
     position: relative;
-    margin-bottom: 15px;
 }
 
 .win-button-inner {
-    background: linear-gradient(135deg, #FF6B6B, #FF4757);
-    padding: 20px;
-    border-radius: 20px;
+    background: var(--gradient-danger);
+    padding: 15px 25px;
+    border-radius: var(--radius);
     color: white;
     font-size: 1.2rem;
     font-weight: 700;
@@ -865,7 +771,7 @@ body {
     gap: 10px;
     position: relative;
     z-index: 2;
-    box-shadow: 0 10px 30px rgba(255, 71, 87, 0.4);
+    box-shadow: 0 10px 30px rgba(255, 118, 117, 0.3);
 }
 
 .win-button-glow {
@@ -874,8 +780,8 @@ body {
     left: -5px;
     right: -5px;
     bottom: -5px;
-    background: linear-gradient(135deg, #FF6B6B, #FF4757);
-    border-radius: 25px;
+    background: var(--gradient-danger);
+    border-radius: calc(var(--radius) + 5px);
     filter: blur(15px);
     opacity: 0;
     transition: opacity 0.3s;
@@ -892,48 +798,123 @@ body {
     50% { transform: scale(1.1); opacity: 0.9; }
 }
 
-.win-button.disabled .win-button-inner {
-    background: #CCC;
-    box-shadow: none;
+.win-button.disabled {
     cursor: not-allowed;
 }
 
-/* شريط الإجراءات */
-.action-toast {
-    background: rgba(0,0,0,0.5);
-    backdrop-filter: blur(10px);
-    padding: 12px;
-    border-radius: 30px;
-    color: white;
+.win-button.disabled .win-button-inner {
+    background: #ced4da;
+    box-shadow: none;
+    opacity: 0.7;
+}
+
+/* تقدم اللاعبين */
+.players-progress {
     display: flex;
-    align-items: center;
-    justify-content: center;
     gap: 10px;
-    font-size: 0.95rem;
-    animation: slideUp 0.3s ease;
+    overflow-x: auto;
+    padding: 10px 0;
+    scrollbar-width: none;
+}
+
+.players-progress::-webkit-scrollbar {
+    display: none;
+}
+
+.player-progress-item {
+    min-width: 100px;
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(5px);
+    border-radius: var(--radius);
+    padding: 10px;
+    text-align: center;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.player-progress-item.winner {
+    background: var(--warning);
+    color: var(--dark);
+    animation: winnerGlow 1s infinite;
+}
+
+@keyframes winnerGlow {
+    0%, 100% { box-shadow: 0 0 20px var(--warning); }
+    50% { box-shadow: 0 0 40px var(--warning); }
+}
+
+.progress-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin: 0 auto 8px;
+    border: 2px solid white;
+}
+
+.progress-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.progress-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.progress-bar-container {
+    height: 4px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: white;
+    transition: width 0.3s ease;
+}
+
+.progress-count {
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
 /* المودال العصري */
 .modern-modal {
     background: white;
-    border-radius: 40px;
+    border-radius: var(--radius-lg);
     padding: 30px;
     max-width: 350px;
     width: 90%;
-    position: relative;
-    overflow: hidden;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
     animation: modalPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes modalPop {
     from {
         opacity: 0;
-        transform: scale(0.8) translateY(50px);
+        transform: translate(-50%, -30%) scale(0.8);
     }
     to {
         opacity: 1;
-        transform: scale(1) translateY(0);
+        transform: translate(-50%, -50%) scale(1);
     }
+}
+
+.modern-modal.hidden {
+    display: none;
 }
 
 .confetti {
@@ -943,15 +924,18 @@ body {
     width: 100%;
     height: 100%;
     pointer-events: none;
-    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="3" fill="%236C5CE7"/><circle cx="80" cy="30" r="3" fill="%23FF6B6B"/><circle cx="30" cy="80" r="3" fill="%2300D2FF"/><circle cx="70" cy="70" r="3" fill="%23FDCB6E"/></svg>');
-    background-size: 50px 50px;
-    animation: confettiFall 5s linear infinite;
-    opacity: 0.3;
+    background: repeating-linear-gradient(45deg, 
+        var(--primary) 0px, var(--primary) 10px,
+        var(--secondary) 10px, var(--secondary) 20px,
+        var(--danger) 20px, var(--danger) 30px,
+        var(--warning) 30px, var(--warning) 40px);
+    opacity: 0.1;
+    animation: confettiFall 10s linear infinite;
 }
 
 @keyframes confettiFall {
-    from { transform: translateY(-100%); }
-    to { transform: translateY(100%); }
+    from { background-position: 0 0; }
+    to { background-position: 100px 100px; }
 }
 
 .winner-avatar {
@@ -960,13 +944,20 @@ body {
     border-radius: 50%;
     overflow: hidden;
     margin: 0 auto 20px;
-    border: 5px solid var(--primary);
+    border: 4px solid var(--primary);
+    box-shadow: var(--shadow);
     animation: winnerSpin 1s ease;
 }
 
 @keyframes winnerSpin {
     from { transform: rotate(0deg) scale(0); }
     to { transform: rotate(360deg) scale(1); }
+}
+
+.winner-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .winner-title {
@@ -978,31 +969,35 @@ body {
 }
 
 .winner-message {
-    color: #666;
+    color: var(--gray);
     text-align: center;
     margin-bottom: 20px;
+    font-size: 1.1rem;
 }
 
 .winner-stats {
     display: flex;
     justify-content: center;
-    gap: 30px;
+    gap: 40px;
     margin-bottom: 30px;
+    padding: 15px;
+    background: var(--light);
+    border-radius: var(--radius);
 }
 
 .winner-stat {
     text-align: center;
 }
 
-.stat-value {
+.winner-stat .stat-value {
     display: block;
-    font-size: 1.8rem;
+    font-size: 2rem;
     font-weight: 800;
     color: var(--dark);
 }
 
-.stat-label {
-    color: #999;
+.winner-stat .stat-label {
+    color: var(--gray);
     font-size: 0.9rem;
 }
 
@@ -1015,30 +1010,26 @@ body {
     flex: 1;
     padding: 15px;
     border: none;
-    border-radius: 15px;
+    border-radius: var(--radius);
     font-size: 1rem;
     font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: var(--transition);
 }
 
 .modal-btn.primary {
-    background: var(--gradient);
+    background: var(--gradient-success);
     color: white;
 }
 
 .modal-btn.secondary {
-    background: #F0F0F0;
+    background: var(--light);
     color: var(--dark);
 }
 
 .modal-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow);
 }
 
 /* القائمة الجانبية */
@@ -1050,7 +1041,7 @@ body {
     height: 100%;
     background: white;
     z-index: 2000;
-    box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+    box-shadow: -5px 0 30px rgba(0,0,0,0.1);
     animation: slideInRight 0.3s ease;
     display: flex;
     flex-direction: column;
@@ -1079,6 +1070,11 @@ body {
 .close-menu i {
     font-size: 1.5rem;
     cursor: pointer;
+    transition: var(--transition);
+}
+
+.close-menu i:hover {
+    transform: scale(1.1);
 }
 
 .menu-profile {
@@ -1091,6 +1087,12 @@ body {
     border-radius: 50%;
     border: 3px solid white;
     margin-bottom: 10px;
+    background: white;
+}
+
+.menu-profile div {
+    font-size: 1.2rem;
+    font-weight: 700;
 }
 
 .side-menu-items {
@@ -1109,18 +1111,19 @@ body {
     font-size: 1rem;
     color: var(--dark);
     cursor: pointer;
-    border-radius: 12px;
-    transition: all 0.3s;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
     margin-bottom: 5px;
 }
 
 .menu-item i {
     width: 25px;
     color: var(--primary);
+    font-size: 1.2rem;
 }
 
 .menu-item:hover {
-    background: #F5F5F5;
+    background: var(--light);
 }
 
 .menu-item.danger {
@@ -1134,12 +1137,124 @@ body {
 .side-menu-footer {
     padding: 20px;
     text-align: center;
-    color: #999;
+    color: var(--gray);
     font-size: 0.9rem;
-    border-top: 1px solid #EEE;
+    border-top: 1px solid #eee;
 }
 
-/* حركات عامة */
+/* إشعارات Toast */
+.toast-message {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(10px);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 50px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1rem;
+    z-index: 3000;
+    opacity: 0;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-lg);
+    max-width: 90%;
+    white-space: nowrap;
+}
+
+.toast-message.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.toast-message i {
+    font-size: 1.2rem;
+}
+
+.toast-success {
+    background: linear-gradient(90deg, var(--success), var(--secondary));
+}
+
+.toast-error {
+    background: linear-gradient(90deg, var(--danger), #ff8787);
+}
+
+.toast-info {
+    background: rgba(0,0,0,0.8);
+}
+
+.toast-warning {
+    background: linear-gradient(90deg, var(--warning), #ffd43b);
+}
+
+/* تحسينات متجاوبة */
+@media (min-width: 768px) {
+    .screen {
+        margin: 20px auto;
+        min-height: auto;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+    
+    .lobby-footer {
+        position: sticky;
+        border-radius: var(--radius-lg);
+        margin-top: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .cards-grid {
+        gap: 10px;
+    }
+    
+    .modern-card {
+        padding: 15px 5px;
+    }
+    
+    .card-emoji {
+        font-size: 2.5rem;
+    }
+    
+    .card-name {
+        font-size: 0.9rem;
+    }
+    
+    .timer-circle {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .timer-text {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .menu-title {
+        font-size: 2.2rem;
+    }
+    
+    .player-avatar {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .player-info h3 {
+        font-size: 1.2rem;
+    }
+}
+
+/* أنيميشنات إضافية */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 @keyframes slideUp {
     from {
         opacity: 0;
@@ -1151,41 +1266,53 @@ body {
     }
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
 }
 
-.hidden {
-    display: none !important;
+/* فئات مساعدة */
+.text-center { text-align: center; }
+.mt-20 { margin-top: 20px; }
+.mb-20 { margin-bottom: 20px; }
+.p-20 { padding: 20px; }
+.rtl { direction: rtl; }
+.ltr { direction: ltr; }
+
+/* تحسينات الأداء */
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* تحسينات الجوال */
-@media (max-width: 380px) {
-    .cards-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .modern-card {
-        padding: 10px 3px;
-    }
-    
-    .card-emoji {
-        font-size: 2.2rem;
-    }
-    
-    .card-name {
-        font-size: 0.8rem;
-    }
+img {
+    max-width: 100%;
+    height: auto;
 }
 
-/* دعم الشاشات الكبيرة */
-@media (min-width: 768px) {
-    .menu-content {
-        max-width: 500px;
+button {
+    user-select: none;
+}
+
+/* دعم الوضع الليلي (اختياري) */
+@media (prefers-color-scheme: dark) {
+    .lobby-screen {
+        background: #1a1a1a;
+        color: white;
     }
     
-    .cards-grid {
-        grid-template-columns: repeat(4, 1fr);
+    .player-card:not(.host-card) {
+        background: #2d2d2d;
+        color: white;
+    }
+    
+    .lobby-header, .room-code-card {
+        background: #2d2d2d;
+        color: white;
+    }
+    
+    .lobby-header h2 {
+        color: white;
     }
 }
