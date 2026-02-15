@@ -59,6 +59,313 @@ class ModernGame {
             setTimeout(() => {
                 this.joinRoom(joinCode.toUpperCase());
             }, 1000);
+            // أضف هذه الخاصيات في constructor
+constructor() {
+    // ... الكود الموجود ...
+    
+    // إضافة خاصيات الذكاء الاصطناعي
+    this.aiPlayers = [];
+    this.aiDifficulty = 'medium'; // 'easy', 'medium', 'hard'
+    this.gameMode = 'online'; // 'online', 'single'
+    
+    // ... باقي الكود ...
+}
+
+// دالة بدء اللعب الفردي (استبدل الدالة الموجودة)
+startSinglePlayer() {
+    this.gameMode = 'single';
+    this.state.isHost = true; // أنت المضيف في وضع الفردي
+    this.state.playerId = this.generatePlayerId();
+    
+    // إنشاء لاعبي الذكاء الاصطناعي
+    this.createAIPlayers(3); // 3 خصوم + أنت = 4 لاعبين
+    
+    // الانتقال مباشرة للعبة
+    this.showScreen('game');
+    this.initializeRound();
+    
+    this.showNotification('🎮 وضع اللعب الفردي - تلعب ضد الذكاء الاصطناعي', 'success');
+    this.playSound('start');
+}
+
+// إنشاء لاعبي الذكاء الاصطناعي
+createAIPlayers(count) {
+    const aiNames = ['روبوت 1', 'روبوت 2', 'روبوت 3', 'روبوت ذكي', 'الخصم', 'لاعب X'];
+    const aiAvatars = [
+        'https://api.dicebear.com/7.x/bottts/svg?seed=ai1',
+        'https://api.dicebear.com/7.x/bottts/svg?seed=ai2',
+        'https://api.dicebear.com/7.x/bottts/svg?seed=ai3',
+        'https://api.dicebear.com/7.x/bottts/svg?seed=ai4'
+    ];
+    
+    for (let i = 0; i < count; i++) {
+        const aiId = 'ai_' + Date.now() + '_' + i;
+        this.aiPlayers.push({
+            id: aiId,
+            name: aiNames[Math.floor(Math.random() * aiNames.length)] + ' ' + (i + 1),
+            avatar: aiAvatars[i % aiAvatars.length],
+            isHost: false,
+            isAI: true,
+            difficulty: this.aiDifficulty,
+            reactionTime: this.getAIReactionTime(), // وقت رد الفعل بالمللي ثانية
+            strategy: this.getAIStrategy()
+        });
+        
+        // إضافة للاعبين في الدولة
+        this.state.players[aiId] = {
+            name: this.aiPlayers[i].name,
+            avatar: this.aiPlayers[i].avatar,
+            isHost: false,
+            isAI: true
+        };
+    }
+    
+    console.log(`🤖 تم إنشاء ${count} لاعب من الذكاء الاصطناعي`);
+}
+
+// تحديد وقت رد فعل الذكاء الاصطناعي حسب الصعوبة
+getAIReactionTime() {
+    switch(this.aiDifficulty) {
+        case 'easy': return 3000 + Math.random() * 2000; // 3-5 ثواني
+        case 'medium': return 1500 + Math.random() * 1500; // 1.5-3 ثواني
+        case 'hard': return 500 + Math.random() * 1000; // 0.5-1.5 ثانية
+        default: return 2000;
+    }
+}
+
+// استراتيجية اللعب حسب الصعوبة
+getAIStrategy() {
+    const strategies = ['aggressive', 'balanced', 'cautious'];
+    switch(this.aiDifficulty) {
+        case 'easy': return 'cautious';
+        case 'medium': return 'balanced';
+        case 'hard': return 'aggressive';
+        default: return 'balanced';
+    }
+}
+
+// تعديل دالة dealCards لدعم الذكاء الاصطناعي
+dealCards() {
+    const allCards = [];
+    const timestamp = Date.now();
+
+    // إنشاء 16 بطاقة
+    for (let i = 0; i < 16; i++) {
+        const fruitIndex = Math.floor(Math.random() * this.state.gameData.fruits.length);
+        const emoji = this.state.gameData.fruits[fruitIndex];
+        allCards.push({
+            id: `card-${i}-${timestamp}`,
+            emoji: emoji,
+            name: this.fruitsNames[emoji] || 'فاكهة',
+            fruitId: fruitIndex
+        });
+    }
+
+    // خلط البطاقات
+    this.shuffleArray(allCards);
+
+    // تحديد جميع اللاعبين (اللاعب الحقيقي + الذكاء الاصطناعي)
+    const allPlayerIds = [this.state.playerId, ...this.aiPlayers.map(ai => ai.id)];
+    
+    // توزيع البطاقات
+    allPlayerIds.forEach((playerId, index) => {
+        const startIdx = index * 4;
+        const endIdx = startIdx + 4;
+        const playerCards = allCards.slice(startIdx, endIdx);
+        
+        this.state.gameData.playersCards[playerId] = playerCards;
+
+        // عرض بطاقات اللاعب الحقيقي فقط
+        if (playerId === this.state.playerId) {
+            this.displayMyCards(playerCards);
+        }
+    });
+
+    // عرض تقدم جميع اللاعبين
+    this.displayPlayersProgress();
+    
+    // بدء تفكير الذكاء الاصطناعي
+    if (this.gameMode === 'single') {
+        this.startAIThinking();
+    }
+}
+
+// خلط المصفوفة
+shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+// بدء تفكير الذكاء الاصطناعي
+startAIThinking() {
+    this.aiPlayers.forEach(ai => {
+        const aiCards = this.state.gameData.playersCards[ai.id];
+        if (!aiCards) return;
+        
+        // تأخير حسب صعوبة الذكاء الاصطناعي
+        setTimeout(() => {
+            this.aiMakeDecision(ai, aiCards);
+        }, ai.reactionTime);
+    });
+}
+
+// اتخاذ قرار الذكاء الاصطناعي
+aiMakeDecision(ai, cards) {
+    if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) return;
+    
+    // تحليل البطاقات
+    const counts = {};
+    cards.forEach(card => {
+        counts[card.emoji] = (counts[card.emoji] || 0) + 1;
+    });
+    
+    const maxCount = Math.max(...Object.values(counts));
+    const hasFour = maxCount >= 4;
+    
+    // استراتيجية الذكاء الاصطناعي
+    switch(ai.strategy) {
+        case 'aggressive':
+            // إذا كان لديه 3 أو أكثر، يحاول الفوز
+            if (maxCount >= 3 || hasFour) {
+                if (hasFour) {
+                    this.aiClaimWin(ai);
+                } else {
+                    this.aiSwapCards(ai, cards, counts);
+                }
+            }
+            break;
+            
+        case 'balanced':
+            // متوازن - يفوز فقط إذا كان لديه 4
+            if (hasFour) {
+                this.aiClaimWin(ai);
+            } else if (Math.random() > 0.7) {
+                this.aiSwapCards(ai, cards, counts);
+            }
+            break;
+            
+        case 'cautious':
+            // حذر - يفوز فقط إذا كان متأكد
+            if (hasFour && maxCount === 4) {
+                this.aiClaimWin(ai);
+            }
+            break;
+    }
+    
+    // تحديث عرض تقدم الذكاء الاصطناعي
+    this.updateAIDisplay(ai);
+}
+
+// الذكاء الاصطناعي يطالب بالفوز
+aiClaimWin(ai) {
+    console.log(`🤖 ${ai.name} يطالب بالفوز!`);
+    
+    // تأخير بسيط لإعطاء شعور طبيعي
+    setTimeout(() => {
+        if (this.state.gameData.gameActive && !this.state.gameData.roundWinner) {
+            this.handleWin(ai.id);
+            this.showNotification(`🤖 ${ai.name} فاز بالجولة!`, 'info');
+        }
+    }, 500);
+}
+
+// الذكاء الاصطناعي يبدل البطاقات (محاكاة)
+aiSwapCards(ai, cards, counts) {
+    // محاكاة تبديل البطاقات - في النسخة الكاملة يمكن تنفيذ منطق حقيقي
+    console.log(`🤖 ${ai.name} يفكر في تبديل البطاقات...`);
+}
+
+// تحديث عرض الذكاء الاصطناعي
+updateAIDisplay(ai) {
+    const container = this.getElement('players-progress');
+    if (!container) return;
+    
+    // تحديث التقدم للذكاء الاصطناعي
+    const aiCards = this.state.gameData.playersCards[ai.id];
+    if (aiCards) {
+        const maxSame = this.getMaxSameCards(aiCards);
+        const progress = (maxSame / 4) * 100;
+        
+        // البحث عن عنصر الذكاء الاصطناعي وتحديثه
+        const aiElements = container.querySelectorAll('.player-progress-item');
+        aiElements.forEach(el => {
+            const nameEl = el.querySelector('.progress-name');
+            if (nameEl && nameEl.textContent === ai.name) {
+                const bar = el.querySelector('.progress-bar');
+                const count = el.querySelector('.progress-count');
+                if (bar) bar.style.width = progress + '%';
+                if (count) count.textContent = maxSame + '/4';
+            }
+        });
+    }
+}
+
+// إضافة دالة لاختيار صعوبة الذكاء الاصطناعي
+showDifficultySelection() {
+    const difficulty = prompt('اختر مستوى الصعوبة:\n1 - سهل 🟢\n2 - متوسط 🟡\n3 - صعب 🔴', '2');
+    
+    switch(difficulty) {
+        case '1':
+            this.aiDifficulty = 'easy';
+            break;
+        case '2':
+            this.aiDifficulty = 'medium';
+            break;
+        case '3':
+            this.aiDifficulty = 'hard';
+            break;
+        default:
+            this.aiDifficulty = 'medium';
+    }
+    
+    this.startSinglePlayer();
+}
+
+// تعديل دالة displayPlayersProgress لدور الذكاء الاصطناعي
+displayPlayersProgress() {
+    const container = this.getElement('players-progress');
+    if (!container) return;
+
+    container.innerHTML = '';
+    
+    // عرض جميع اللاعبين (بما فيهم الذكاء الاصطناعي)
+    const allPlayers = [
+        { id: this.state.playerId, ...this.state.players[this.state.playerId], isMe: true },
+        ...this.aiPlayers.map(ai => ({ id: ai.id, ...ai, isAI: true }))
+    ];
+    
+    allPlayers.forEach(player => {
+        const cards = this.state.gameData.playersCards[player.id];
+        if (!cards) return;
+        
+        const maxSame = this.getMaxSameCards(cards);
+        const progress = (maxSame / 4) * 100;
+        
+        const progressEl = document.createElement('div');
+        progressEl.className = `player-progress-item ${player.id === this.state.gameData.roundWinner ? 'winner' : ''} ${player.isAI ? 'ai-player' : ''}`;
+        
+        // أيقونة مختلفة للذكاء الاصطناعي
+        const avatarHtml = player.isAI 
+            ? '<i class="fas fa-robot" style="font-size: 24px; color: white;"></i>'
+            : `<img src="${player.avatar}" alt="${player.name}">`;
+        
+        progressEl.innerHTML = `
+            <div class="progress-avatar">
+                ${avatarHtml}
+            </div>
+            <div class="progress-name">${player.name} ${player.isAI ? '🤖' : ''}</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: ${progress}%"></div>
+            </div>
+            <div class="progress-count">${maxSame}/4</div>
+        `;
+        
+        container.appendChild(progressEl);
+    });
+}
         }
     }
 
