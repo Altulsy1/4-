@@ -220,6 +220,17 @@
       <!-- تقدم اللاعبين -->
       <div id="players-progress" class="players-progress" aria-label="تقدم اللاعبين"></div>
     </div>
+    <!-- إضافة شريط التحكم بالبطاقات -->
+<div class="card-controls">
+    <button class="control-btn" onclick="window.game?.shuffleMyCards()">
+        <i class="fas fa-random"></i>
+        خلط البطاقات
+    </button>
+    <button class="control-btn" onclick="window.game?.sortMyCards()">
+        <i class="fas fa-sort"></i>
+        ترتيب البطاقات
+    </button>
+</div>
   </section>
 
   <!-- نافذة النتيجة -->
