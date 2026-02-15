@@ -338,6 +338,37 @@
       </button>
     </div>
   </div>
+  <!-- لوحة المتصدرين -->
+<div id="leaderboard-modal" class="modern-modal hidden" role="dialog" aria-modal="true" aria-label="لوحة المتصدرين">
+    <div class="leaderboard-modal-content">
+        <div class="modal-header">
+            <h2>🏆 لوحة المتصدرين</h2>
+            <button class="close-modal-btn" onclick="closeLeaderboard()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="leaderboard-tabs">
+            <button class="tab-btn active" data-tab="global">العالمي</button>
+            <button class="tab-btn" data-tab="weekly">هذا الأسبوع</button>
+            <button class="tab-btn" data-tab="friends">الأصدقاء</button>
+        </div>
+        
+        <div id="leaderboard-container" class="leaderboard-container">
+            <!-- سيتم تعبئتها dynamically -->
+        </div>
+        
+        <div class="leaderboard-footer">
+            <button class="google-signin-btn" onclick="signInWithGoogle()">
+                <img src="https://www.google.com/favicon.ico" alt="Google">
+                تسجيل الدخول للمشاركة
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- إضافة حالة الاتصال في الهيدر -->
+<div class="connection-status" id="connection-status">🔴 غير متصل</div>
 
   <!-- سكريبت اللعبة -->
   <script src="game-modern.js"></script>
