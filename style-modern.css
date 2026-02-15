@@ -1481,7 +1481,7 @@ button {
     background: rgba(255,255,255,0.1);
     border-radius: var(--radius);
     padding: 15px;
-}
+    }
 
 .leaderboard-header {
     display: flex;
@@ -1489,12 +1489,12 @@ button {
     align-items: center;
     color: white;
     margin-bottom: 15px;
-}
+   }
 
 .leaderboard-header h3 {
     font-size: 1.2rem;
     font-weight: 700;
-}
+   }
 
 .view-all-btn {
     background: rgba(255,255,255,0.2);
@@ -1505,31 +1505,31 @@ button {
     cursor: pointer;
     font-size: 0.9rem;
     transition: var(--transition);
-}
+   }
 
 .view-all-btn:hover {
     background: rgba(255,255,255,0.3);
-}
+   }
 
 .leaderboard-container {
     max-height: 300px;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.3) transparent;
-}
+  }
 
 .leaderboard-container::-webkit-scrollbar {
     width: 5px;
-}
+  }
 
 .leaderboard-container::-webkit-scrollbar-track {
     background: transparent;
-}
+  }
 
 .leaderboard-container::-webkit-scrollbar-thumb {
     background: rgba(255,255,255,0.3);
     border-radius: 10px;
-}
+  }
 
 .leaderboard-item {
     display: flex;
@@ -1541,29 +1541,29 @@ button {
     margin-bottom: 5px;
     color: white;
     animation: slideIn 0.3s ease;
-}
+  }
 
 .leaderboard-item.rank-1 {
     background: linear-gradient(90deg, rgba(255,215,0,0.2), transparent);
     border-right: 3px solid gold;
-}
+  }
 
 .leaderboard-item.rank-2 {
     background: linear-gradient(90deg, rgba(192,192,192,0.2), transparent);
     border-right: 3px solid silver;
-}
+  }
 
 .leaderboard-item.rank-3 {
     background: linear-gradient(90deg, rgba(205,127,50,0.2), transparent);
     border-right: 3px solid #cd7f32;
-}
+  }
 
 .leaderboard-rank {
     width: 40px;
     text-align: center;
     font-weight: 800;
     font-size: 1.2rem;
-}
+  }
 
 .leaderboard-avatar {
     width: 40px;
@@ -1571,13 +1571,13 @@ button {
     border-radius: 50%;
     overflow: hidden;
     border: 2px solid rgba(255,255,255,0.3);
-}
+  }
 
 .leaderboard-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-}
+  }
 
 .leaderboard-name {
     flex: 1;
@@ -1585,27 +1585,27 @@ button {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
+  }
 
 .leaderboard-wins {
     font-weight: 700;
     color: gold;
     min-width: 60px;
     text-align: center;
-}
+  }
 
 .leaderboard-streak {
     color: #ff6b6b;
     min-width: 50px;
     text-align: center;
-}
+  }
 
 .empty-leaderboard {
     text-align: center;
     color: rgba(255,255,255,0.5);
     padding: 20px;
     font-style: italic;
-}
+  }
 
 /* حالة الاتصال */
 .connection-status {
@@ -1614,17 +1614,17 @@ button {
     border-radius: 20px;
     font-size: 0.8rem;
     margin-right: 10px;
-}
+  }
 
 .connection-status.online {
     background: rgba(0, 255, 0, 0.2);
     color: #00ff00;
-}
+  }
 
 .connection-status.offline {
     background: rgba(255, 0, 0, 0.2);
     color: #ff6b6b;
-}
+  }
 
 /* زر تسجيل الدخول */
 .google-signin-btn {
@@ -1640,7 +1640,7 @@ button {
     cursor: pointer;
     transition: var(--transition);
     margin-top: 10px;
-}
+  }
 
 .google-signin-btn:hover {
     transform: translateY(-2px);
@@ -1665,5 +1665,6 @@ button {
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
     z-index: 100;
-}
+  }
+    
 }
