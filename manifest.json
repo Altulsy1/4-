@@ -1,0 +1,11 @@
+{
+  "name": "Fruit Clash",
+  "short_name": "FruitClash",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#6C5CE7",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": []
+}
