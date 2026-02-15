@@ -1,7 +1,7 @@
 {
-    "name": "Fruit Clash - لعبة الفواكه الأربعة",
+    "name": "Fruit Clash - لعبة الكلمات الأربعة",
     "short_name": "FruitClash",
-    "description": "لعبة ممتعة وتفاعلية: اجمع 4 بطاقات متطابقة من الفواكه واربح!",
+    "description": "لعبة ممتعة وتفاعلية: اجمع 4 بطاقات متطابقة واربح!",
     "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#6C5CE7",
