@@ -1,1299 +1,1182 @@
-// game-modern.js - نسخة محسّنة ومصحّحة (Fruit Clash) مع Firebase
-// ملاحظة: هذه النسخة تعمل محلياً (محاكاة أونلاين) + وضع لعب فردي ضد الذكاء الاصطناعي + Firebase
-
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
-
-<script src="game-modern.js"></script>
+// game-modern.js - نسخة مصححة بالكامل مع تبادل حقيقي للبطاقات
 
 class ModernGame {
-  constructor() {
-    // تهيئة Firebase
-    this.firebaseInitialized = false;
-    this.initializeFirebase();
-    
-    // إعدادات الذكاء الاصطناعي / وضع اللعب
-    this.aiPlayers = [];
-    this.aiDifficulty = 'medium'; // easy | medium | hard
-    this.gameMode = 'online'; // online | single
-    this.gameStarted = false;
-    this.canClaimWin = false;
-    this.database = null;
-    this.leaderboardRef = null;
-    this.roomsRef = null;
-
-    this.state = {
-      playerId: this.generatePlayerId(),
-      playerName: localStorage.getItem('fruitClash_playerName') || 'لاعب',
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${Date.now()}`,
-      isHost: false,
-      roomId: null,
-      players: {},
-
-      gameData: {
-        currentRound: 1,
-        roundWinner: null,
-        playersCards: {},
-        gameActive: false,
-        startTime: null,
-        maxPlayers: 4,
-        roundTime: 60,
-        fruits: ['🍎', '🍌', '🍊', '🍇', '🍓', '🍉', '🍒', '🍍']
-      },
-
-      stats: null,
-      connectionStatus: 'offline',
-      leaderboard: []
-    };
-
-    this.timerInterval = null;
-    this.firebaseListeners = [];
-
-    this.fruitsNames = {
-      '🍎': 'تفاح',
-      '🍌': 'موز',
-      '🍊': 'برتقال',
-      '🍇': 'عنب',
-      '🍓': 'فراولة',
-      '🍉': 'بطيخ',
-      '🍒': 'كرز',
-      '🍍': 'أناناس'
-    };
-    // أضف هذه الدوال داخل كلاس ModernGame
-
-// ===== دوال مساعدة مفقودة =====
-generatePlayerId() {
-  return 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-}
-
-generateRoomCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 4; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
-}
-
-showScreen(screenId) {
-  document.querySelectorAll('.screen').forEach(screen => {
-    screen.classList.add('hidden');
-  });
-  const screen = document.getElementById(screenId);
-  if (screen) screen.classList.remove('hidden');
-}
-
-updatePlayersList() {
-  const grid = document.getElementById('players-grid');
-  if (!grid) return;
-  
-  grid.innerHTML = '';
-  const players = Object.values(this.state.players);
-  
-  players.forEach(player => {
-    const card = document.createElement('div');
-    card.className = `player-card ${player.isHost ? 'host-card' : ''}`;
-    card.innerHTML = `
-      <div class="player-avatar">
-        <img src="${player.avatar}" alt="${player.name}">
-      </div>
-      <div class="player-name">${player.name}</div>
-      ${player.isHost ? '<div class="player-badge">👑 المضيف</div>' : ''}
-    `;
-    grid.appendChild(card);
-  });
-  
-  // إضافة بطاقات فارغة
-  const maxPlayers = this.state.gameData.maxPlayers;
-  for (let i = players.length; i < maxPlayers; i++) {
-    const empty = document.createElement('div');
-    empty.className = 'player-card empty-card';
-    empty.innerHTML = `
-      <div class="empty-icon">⌛</div>
-      <div class="empty-text">انتظار...</div>
-    `;
-    grid.appendChild(empty);
-  }
-  
-  // تحديث عداد اللاعبين
-  const countEl = document.getElementById('player-count');
-  if (countEl) countEl.textContent = `${players.length}/${maxPlayers}`;
-  
-  // تفعيل/تعطيل زر البداية
-  const startBtn = document.getElementById('start-game-btn');
-  if (startBtn) {
-    if (this.state.isHost && players.length >= 2) {
-      startBtn.disabled = false;
-      startBtn.classList.remove('disabled');
-    } else {
-      startBtn.disabled = true;
-      startBtn.classList.add('disabled');
-    }
-  }
-}
-
-ensureSelfInPlayers(asHost) {
-  this.state.players[this.state.playerId] = {
-    name: this.state.playerName,
-    avatar: this.state.avatar,
-    isHost: asHost,
-    isAI: false,
-    joinedAt: new Date().toISOString()
-  };
-}
-
-generateQRCode() {
-  const canvas = document.getElementById('qr-code');
-  if (!canvas || !window.QRCode) return;
-  
-  const roomUrl = `${window.location.origin}?join=${this.state.roomId}`;
-  QRCode.toCanvas(canvas, roomUrl, { width: 150 }, (error) => {
-    if (error) console.error('QR Error:', error);
-  });
-}
-
-updateLobbyDisplay() {
-  const codeEl = document.getElementById('room-code');
-  if (codeEl) codeEl.textContent = this.state.roomId || '----';
-  this.updatePlayersList();
-}
-
-showNotification(message, type = 'info') {
-  // إزالة أي إشعار سابق
-  const oldToast = document.querySelector('.toast-message');
-  if (oldToast) oldToast.remove();
-  
-  const toast = document.createElement('div');
-  toast.className = `toast-message toast-${type}`;
-  
-  let icon = 'ℹ️';
-  if (type === 'success') icon = '✅';
-  else if (type === 'error') icon = '❌';
-  else if (type === 'warning') icon = '⚠️';
-  
-  toast.innerHTML = `<i>${icon}</i> ${message}`;
-  document.body.appendChild(toast);
-  
-  setTimeout(() => toast.classList.add('show'), 10);
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
-
-copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    this.showNotification('✅ تم النسخ', 'success');
-  }).catch(() => {
-    this.showNotification('❌ فشل النسخ', 'error');
-  });
-}
-
-showJoinDialog() {
-  const code = prompt('أدخل رمز الغرفة:');
-  if (code && code.length === 4) {
-    this.joinRoom(code.toUpperCase());
-  }
-}
-
-shareInvite() {
-  const text = `انضم إلي في لعبة Fruit Clash\nرمز الغرفة: ${this.state.roomId}\n${window.location.origin}`;
-  if (navigator.share) {
-    navigator.share({ title: 'Fruit Clash', text });
-  } else {
-    this.copyToClipboard(text);
-  }
-}
-
-loadStats() {
-  try {
-    const saved = localStorage.getItem('fruitClash_stats');
-    return saved ? JSON.parse(saved) : {
-      wins: 0,
-      gamesPlayed: 0,
-      winStreak: 0,
-      fastestWin: null,
-      lastPlayed: null
-    };
-  } catch {
-    return {
-      wins: 0,
-      gamesPlayed: 0,
-      winStreak: 0,
-      fastestWin: null,
-      lastPlayed: null
-    };
-  }
-}
-
-updateStats(type, value) {
-  if (!this.state.stats) this.state.stats = this.loadStats();
-
-  if (type === 'win') {
-    this.state.stats.wins += 1;
-    this.state.stats.winStreak += 1;
-    this.state.stats.gamesPlayed += 1;
-    if (!this.state.stats.fastestWin || value < this.state.stats.fastestWin) {
-      this.state.stats.fastestWin = value;
-    }
-  } else if (type === 'loss') {
-    this.state.stats.winStreak = 0;
-    this.state.stats.gamesPlayed += 1;
-  }
-
-  this.state.stats.lastPlayed = new Date().toISOString();
-
-  try {
-    localStorage.setItem('fruitClash_stats', JSON.stringify(this.state.stats));
-    
-    // حفظ في Firebase إذا كان متصلاً - تم التصحيح هنا
-    if (this.firebaseInitialized) {
-      this.saveGameResultToFirebase(); // لا تمرر أي معامل
-    }
-  } catch (_) {}
-}
-
-saveGameResultToFirebase() { // تم إزالة المعامل
-  if (!this.firebaseInitialized || !this.leaderboardRef) return;
-
-  const playerData = {
-    name: this.state.playerName,
-    avatar: this.state.avatar,
-    wins: this.state.stats?.wins || 0,
-    winStreak: this.state.stats?.winStreak || 0,
-    fastestWin: this.state.stats?.fastestWin || null,
-    lastPlayed: new Date().toISOString(),
-    playerId: this.state.playerId
-  };
-
-  this.leaderboardRef.child(this.state.playerId).set(playerData)
-    .then(() => console.log('✅ Game result saved to Firebase'))
-    .catch(error => console.error('❌ Error saving to Firebase:', error));
-}
-
-updatePlayerDisplay() {
-  const nameEls = ['player-name-display', 'menu-player-name'];
-  nameEls.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = this.state.playerName;
-  });
-  
-  const avatarEls = ['menu-avatar', 'side-avatar'];
-  avatarEls.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.src = this.state.avatar;
-  });
-}
-
-dealCards() {
-  const fruits = [...this.state.gameData.fruits];
-  const myCards = [];
-  
-  // توزيع 4 بطاقات عشوائية
-  for (let i = 0; i < 4; i++) {
-    const randomFruit = fruits[Math.floor(Math.random() * fruits.length)];
-    myCards.push({
-      emoji: randomFruit,
-      name: this.fruitsNames[randomFruit],
-      id: `card_${Date.now()}_${i}_${Math.random()}`
-    });
-  }
-  
-  this.state.gameData.playersCards[this.state.playerId] = myCards;
-  this.updateGameUI();
-}
-
-updateGameUI() {
-  const container = document.getElementById('cards-container');
-  if (!container) return;
-  
-  const myCards = this.state.gameData.playersCards[this.state.playerId] || [];
-  container.innerHTML = '';
-  
-  myCards.forEach((card, index) => {
-    const cardEl = document.createElement('div');
-    cardEl.className = 'modern-card';
-    cardEl.setAttribute('data-index', index);
-    cardEl.onclick = () => this.onCardClick(index);
-    
-    cardEl.innerHTML = `
-      <div class="card-emoji">${card.emoji}</div>
-      <div class="card-name">${card.name}</div>
-      <div class="card-index">${index + 1}</div>
-    `;
-    
-    container.appendChild(cardEl);
-  });
-  
-  // تحديث عداد البطاقات
-  const counter = document.getElementById('cards-count');
-  if (counter) counter.textContent = `${myCards.length}/4`;
-  
-  this.updateWinButtonState();
-}
-
-updateWinButtonState() {
-  const btn = document.getElementById('done-button');
-  if (!btn) return;
-  
-  if (this.canClaimWin && this.state.gameData.gameActive) {
-    btn.disabled = false;
-    btn.classList.remove('disabled');
-    btn.classList.add('can-claim');
-  } else {
-    btn.disabled = true;
-    btn.classList.add('disabled');
-    btn.classList.remove('can-claim');
-  }
-}
-
-onCardClick(index) {
-  // يمكن إضافة وظيفة لتبديل البطاقات لاحقاً
-  console.log('Card clicked:', index);
-}
-
-shuffleMyCards() {
-  const myCards = this.state.gameData.playersCards[this.state.playerId];
-  if (!myCards) return;
-  
-  for (let i = myCards.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [myCards[i], myCards[j]] = [myCards[j], myCards[i]];
-  }
-  
-  this.updateGameUI();
-  this.showNotification('🔄 تم خلط البطاقات', 'success');
-}
-
-sortMyCards() {
-  const myCards = this.state.gameData.playersCards[this.state.playerId];
-  if (!myCards) return;
-  
-  myCards.sort((a, b) => a.emoji.localeCompare(b.emoji));
-  this.updateGameUI();
-  this.showNotification('📊 تم ترتيب البطاقات', 'success');
-}
-
-startTimer(seconds) {
-  this.stopTimer();
-  
-  const timerEl = document.getElementById('game-timer');
-  const progressEl = document.getElementById('timer-progress');
-  if (!timerEl) return;
-  
-  let timeLeft = seconds;
-  timerEl.textContent = timeLeft;
-  
-  const circumference = 2 * Math.PI * 45;
-  progressEl.style.strokeDashoffset = '0';
-  
-  this.timerInterval = setInterval(() => {
-    timeLeft--;
-    timerEl.textContent = timeLeft;
-    
-    // تحديث الدائرة
-    const offset = circumference * (1 - timeLeft / seconds);
-    progressEl.style.strokeDashoffset = offset;
-    
-    if (timeLeft <= 10) {
-      timerEl.parentElement?.classList.add('urgent');
-    }
-    
-    if (timeLeft <= 0) {
-      this.stopTimer();
-      this.handleTimeOut();
-    }
-  }, 1000);
-}
-
-stopTimer() {
-  if (this.timerInterval) {
-    clearInterval(this.timerInterval);
-    this.timerInterval = null;
-  }
-  
-  const timerEl = document.getElementById('game-timer')?.parentElement;
-  if (timerEl) timerEl.classList.remove('urgent');
-}
-
-handleTimeOut() {
-  if (!this.state.gameData.gameActive) return;
-  this.showNotification('⏰ انتهى الوقت!', 'warning');
-  // يمكن إضافة منطق انتهاء الوقت هنا
-}
-
-startAIThinking() {
-  // محاكاة تفكير الذكاء الاصطناعي
-  if (this.gameMode !== 'single') return;
-  
-  setTimeout(() => {
-    if (Math.random() > 0.7) { // 30% فرصة فوز AI
-      this.handleWin('ai_player');
-    }
-  }, 3000 + Math.random() * 2000);
-}
-
-showWinnerModal(playerId, winTime) {
-  const modal = document.getElementById('result-modal');
-  if (!modal) return;
-  
-  const isWinner = playerId === this.state.playerId;
-  const player = this.state.players[playerId] || { name: 'الذكاء الاصطناعي', avatar: '' };
-  
-  document.getElementById('winner-avatar-img').src = player.avatar || this.state.avatar;
-  document.getElementById('result-title').textContent = isWinner ? '🎉 فوز!' : '😢 خسارة';
-  document.getElementById('result-message').textContent = isWinner ? 'أحسنت! أنت الفائز' : `${player.name} فاز بالجولة`;
-  document.getElementById('round-time').textContent = winTime;
-  document.getElementById('win-streak').textContent = this.state.stats?.winStreak || 0;
-  
-  modal.classList.remove('hidden');
-  
-  // ربط الأزرار
-  document.getElementById('next-round-btn').onclick = () => {
-    modal.classList.add('hidden');
-    this.nextRound();
-  };
-  
-  document.getElementById('end-game-btn').onclick = () => {
-    modal.classList.add('hidden');
-    this.leaveRoom();
-  };
-}
-
-nextRound() {
-  this.state.gameData.currentRound++;
-  this.initializeRound(false);
-}
-
-playSound(type) {
-  // يمكن إضافة أصوات لاحقاً
-  console.log('Play sound:', type);
-}
-
-triggerHaptic(type) {
-  if (window.navigator && window.navigator.vibrate) {
-    if (type === 'heavy') window.navigator.vibrate(50);
-    else window.navigator.vibrate(20);
-  }
-}
-
-launchConfetti() {
-  if (window.confetti) {
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 }
-    });
-  }
-}
-
-setDifficulty(level) {
-  this.aiDifficulty = level;
-  this.showNotification(`🎮 الصعوبة: ${level}`, 'info');
-  closeDifficultyModal();
-  
-  // بدء اللعب الفردي
-  this.gameMode = 'single';
-  this.state.isHost = true;
-  this.state.playerId = this.generatePlayerId();
-  this.state.roomId = 'single_' + Date.now();
-  this.state.players = {};
-  this.ensureSelfInPlayers(true);
-  
-  // إضافة لاعبي AI
-  for (let i = 1; i <= 3; i++) {
-    const aiId = `ai_${i}_${Date.now()}`;
-    this.state.players[aiId] = {
-      name: `AI ${i}`,
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=ai${i}`,
-      isHost: false,
-      isAI: true,
-      joinedAt: new Date().toISOString()
-    };
-  }
-  
-  this.showScreen('lobby');
-  this.updateLobbyDisplay();
-  
-  // بدء اللعبة تلقائياً
-  setTimeout(() => {
-    this.showScreen('game');
-    this.initializeRound(true);
-  }, 1000);
-}
-
-init() {
-  // تحميل الإحصائيات
-  this.state.stats = this.loadStats();
-  this.updatePlayerDisplay();
-  
-  // ربط الأزرار
-  document.getElementById('create-room-btn')?.addEventListener('click', () => this.createRoom());
-  document.getElementById('join-room-btn')?.addEventListener('click', () => this.showJoinDialog());
-  document.getElementById('single-player-btn')?.addEventListener('click', () => showDifficultyModal());
-  document.getElementById('edit-name-btn')?.addEventListener('click', () => this.editName());
-  document.getElementById('start-game-btn')?.addEventListener('click', () => this.startGame());
-  document.getElementById('done-button')?.addEventListener('click', () => this.claimWin());
-  
-  console.log('✅ ModernGame initialized');
-}
-
-editName() {
-  const newName = prompt('أدخل اسمك الجديد:', this.state.playerName);
-  if (newName && newName.trim()) {
-    this.state.playerName = newName.trim();
-    localStorage.setItem('fruitClash_playerName', this.state.playerName);
-    this.updatePlayerDisplay();
-    this.showNotification('✅ تم تغيير الاسم', 'success');
-  }
-}
-
-startGame() {
-  if (!this.state.isHost) {
-    this.showNotification('❌ فقط المضيف يمكنه بدء اللعبة', 'error');
-    return;
-  }
-  
-  const players = Object.values(this.state.players);
-  if (players.length < 2) {
-    this.showNotification('❌ يجب توفر لاعبين على الأقل', 'error');
-    return;
-  }
-  
-  this.showScreen('game');
-  this.initializeRound(true);
-}
-
-    this.init();
-  }
-
-  // ===== تهيئة Firebase =====
-  initializeFirebase() {
-    // التحقق من وجود Firebase SDK
-    if (typeof firebase === 'undefined') {
-      console.warn('⚠️ Firebase SDK غير موجود. سيتم تحميله...');
-      this.loadFirebaseSDK();
-      return;
-    }
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyDeOQuQ2umGELjT8wNIw9vJr613Fxj1Dg0",
-      authDomain: "kin-tien.firebaseapp.com",
-      databaseURL: "https://kin-tien-default-rtdb.firebaseio.com",
-      projectId: "kin-tien",
-      storageBucket: "kin-tien.firebasestorage.app",
-      messagingSenderId: "285420896766",
-      appId: "1:285420896766:web:234ee65007d9333c1200af",
-      measurementId: "G-X8W7Y7Z72P"
-    };
-
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-    try {
-      // تهيئة Firebase إذا لم تكن مهيأة مسبقاً
-      if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-      }
-      
-      this.database = firebase.database();
-      this.leaderboardRef = this.database.ref('leaderboard');
-      this.roomsRef = this.database.ref('rooms');
-      
-      this.firebaseInitialized = true;
-      console.log('✅ Firebase initialized successfully');
-      
-      // تحميل لوحة المتصدرين
-      this.loadLeaderboard();
-      
-      // تحديث حالة الاتصال
-      this.updateConnectionStatus(true);
-      
-    } catch (error) {
-      console.error('❌ Firebase initialization error:', error);
-      this.updateConnectionStatus(false);
-    }
-  }
-
-  loadFirebaseSDK() {
-    // تحميل Firebase SDK إذا لم يكن موجوداً
-    const scripts = [
-      'https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js',
-      'https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js',
-      'https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js',
-      'https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js'
-    ];
-
-    let loadedCount = 0;
-    
-    scripts.forEach(src => {
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.onload = () => {
-        loadedCount++;
-        if (loadedCount === scripts.length) {
-          console.log('✅ Firebase SDK loaded');
-          this.initializeFirebase();
-        }
-      };
-      document.head.appendChild(script);
-    });
-  }
-
-  updateConnectionStatus(isConnected) {
-    this.state.connectionStatus = isConnected ? 'online' : 'offline';
-    
-    // تحديث واجهة المستخدم بحالة الاتصال
-    const statusElement = this.getElement('connection-status');
-    if (statusElement) {
-      statusElement.textContent = isConnected ? '🟢 متصل' : '🔴 غير متصل';
-      statusElement.className = isConnected ? 'online' : 'offline';
-    }
-  }
-
-  // ===== لوحة المتصدرين =====
-  loadLeaderboard() {
-    if (!this.firebaseInitialized || !this.leaderboardRef) return;
-
-    this.leaderboardRef.orderByChild('wins').limitToLast(10).on('value', (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        this.state.leaderboard = Object.values(data)
-          .sort((a, b) => b.wins - a.wins)
-          .map((player, index) => ({
-            rank: index + 1,
-            ...player
-          }));
-        
-        this.displayLeaderboard();
-      }
-    }, (error) => {
-      console.error('Error loading leaderboard:', error);
-    });
-  }
-
-  displayLeaderboard() {
-    const container = this.getElement('leaderboard-container');
-    if (!container) return;
-
-    container.innerHTML = '';
-    
-    if (this.state.leaderboard.length === 0) {
-      container.innerHTML = '<div class="empty-leaderboard">لا توجد نتائج بعد</div>';
-      return;
-    }
-
-    this.state.leaderboard.forEach(player => {
-      const item = document.createElement('div');
-      item.className = `leaderboard-item rank-${player.rank}`;
-      
-      let rankIcon = '';
-      if (player.rank === 1) rankIcon = '🥇';
-      else if (player.rank === 2) rankIcon = '🥈';
-      else if (player.rank === 3) rankIcon = '🥉';
-      else rankIcon = `#${player.rank}`;
-
-      item.innerHTML = `
-        <div class="leaderboard-rank">${rankIcon}</div>
-        <div class="leaderboard-avatar">
-          <img src="${player.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'}" alt="${player.name}">
-        </div>
-        <div class="leaderboard-name">${player.name}</div>
-        <div class="leaderboard-wins">🏆 ${player.wins}</div>
-        <div class="leaderboard-streak">🔥 ${player.winStreak || 0}</div>
-      `;
-      
-      container.appendChild(item);
-    });
-  }
-
-  // ===== حفظ النتائج في Firebase =====
-  saveGameResultToFirebase(result) {
-    if (!this.firebaseInitialized || !this.leaderboardRef) return;
-
-    const playerData = {
-      name: this.state.playerName,
-      avatar: this.state.avatar,
-      wins: this.state.stats.wins || 0,
-      winStreak: this.state.stats.winStreak || 0,
-      fastestWin: this.state.stats.fastestWin || null,
-      lastPlayed: new Date().toISOString(),
-      playerId: this.state.playerId
-    };
-
-    // تحديث أو إضافة اللاعب في لوحة المتصدرين
-    this.leaderboardRef.child(this.state.playerId).set(playerData)
-      .then(() => {
-        console.log('✅ Game result saved to Firebase');
-      })
-      .catch((error) => {
-        console.error('❌ Error saving to Firebase:', error);
-      });
-  }
-
-  // ===== إنشاء غرفة في Firebase =====
-  createFirebaseRoom() {
-    if (!this.firebaseInitialized || !this.roomsRef) {
-      this.showNotification('⚠️ Firebase غير متصل. سيتم استخدام الوضع المحلي', 'warning');
-      return null;
-    }
-
-    const roomData = {
-      roomId: this.state.roomId,
-      hostId: this.state.playerId,
-      hostName: this.state.playerName,
-      createdAt: firebase.database.ServerValue.TIMESTAMP,
-      status: 'waiting',
-      players: {
-        [this.state.playerId]: {
-          name: this.state.playerName,
-          avatar: this.state.avatar,
-          isHost: true,
-          joinedAt: firebase.database.ServerValue.TIMESTAMP
-        }
-      },
-      gameState: null,
-      maxPlayers: this.state.gameData.maxPlayers
-    };
-
-    // حفظ الغرفة في Firebase
-    this.roomsRef.child(this.state.roomId).set(roomData)
-      .then(() => {
-        console.log('✅ Room created in Firebase:', this.state.roomId);
-        
-        // الاستماع لتغييرات الغرفة
-        this.listenToRoomChanges(this.state.roomId);
-      })
-      .catch((error) => {
-        console.error('❌ Error creating room in Firebase:', error);
-      });
-
-    return roomData;
-  }
-
-  listenToRoomChanges(roomId) {
-    if (!this.firebaseInitialized || !this.roomsRef) return;
-
-    // إزالة المستمعين السابقين
-    this.firebaseListeners.forEach(unsub => unsub());
-    this.firebaseListeners = [];
-
-    const roomRef = this.roomsRef.child(roomId);
-
-    // الاستماع لتغييرات الغرفة
-    const onRoomChange = roomRef.on('value', (snapshot) => {
-      const roomData = snapshot.val();
-      if (!roomData) return;
-
-      // تحديث قائمة اللاعبين
-      if (roomData.players) {
-        Object.entries(roomData.players).forEach(([playerId, playerData]) => {
-          this.state.players[playerId] = playerData;
-        });
-        this.updatePlayersList();
-      }
-
-      // تحديث حالة اللعبة
-      if (roomData.gameState) {
-        this.state.gameData = {
-          ...this.state.gameData,
-          ...roomData.gameState
+    constructor() {
+        this.state = {
+            playerId: this.generatePlayerId(),
+            playerName: localStorage.getItem('fruitClash_playerName') || 'لاعب',
+            avatar: this.generateAvatar(),
+            isHost: false,
+            roomId: null,
+            players: {},
+            gameData: {
+                currentRound: 1,
+                roundWinner: null,
+                playersCards: {},
+                gameActive: false,
+                startTime: null,
+                maxPlayers: 4,
+                roundTime: 60,
+                fruits: ['🍎', '🍌', '🍊', '🍇', '🍓', '🍉', '🍒', '🍍'],
+                deck: [], // مجموعة البطاقات الكاملة
+                turnIndex: 0, // دور اللاعب الحالي
+                lastDiscard: null // آخر بطاقة تم التخلص منها
+            },
+            stats: null,
+            connectionStatus: 'offline',
+            isSinglePlayer: false,
+            botDifficulty: 'medium',
+            gamePhase: 'waiting' // waiting, playing, finished
         };
-      }
 
-      // التحقق من بدء اللعبة
-      if (roomData.status === 'playing' && !this.state.gameData.gameActive) {
+        this.timerInterval = null;
+        this.botInterval = null;
+        this.fruitsNames = {
+            '🍎': 'تفاح', '🍌': 'موز', '🍊': 'برتقال',
+            '🍇': 'عنب', '🍓': 'فراولة', '🍉': 'بطيخ',
+            '🍒': 'كرز', '🍍': 'أناناس'
+        };
+        
+        this.init();
+    }
+
+    // توليد صورة رمزية بحجم مناسب
+    generateAvatar() {
+        const seed = Math.random().toString(36).substring(7);
+        // استخدام صورة بحجم 60x60 بكسل فقط
+        return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&size=60`;
+    }
+
+    getElement(id) {
+        return document.getElementById(id);
+    }
+
+    generatePlayerId() {
+        return 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    async init() {
+        this.state.stats = this.loadStats();
+        this.setupEventListeners();
+        this.updatePlayerDisplay();
+        this.startBackgroundAnimation();
+        this.simulateOnlineCount();
+        this.checkUrlForJoin();
+        this.setupResponsiveLayout();
+    }
+
+    setupResponsiveLayout() {
+        const handleResize = () => {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+            
+            // تصغير الصور على الشاشات الصغيرة
+            const avatars = document.querySelectorAll('.player-avatar img, .progress-avatar img');
+            const screenWidth = window.innerWidth;
+            
+            avatars.forEach(img => {
+                if (screenWidth < 380) {
+                    img.style.width = '40px';
+                    img.style.height = '40px';
+                } else {
+                    img.style.width = '';
+                    img.style.height = '';
+                }
+            });
+        };
+
+        window.addEventListener('resize', handleResize);
+        handleResize();
+    }
+
+    checkUrlForJoin() {
+        const params = new URLSearchParams(window.location.search);
+        const joinCode = params.get('join');
+        if (joinCode) {
+            setTimeout(() => {
+                this.joinRoom(joinCode.toUpperCase());
+            }, 1000);
+        }
+    }
+
+    setupEventListeners() {
+        this.getElement('create-room-btn')?.addEventListener('click', () => this.createRoom());
+        this.getElement('join-room-btn')?.addEventListener('click', () => this.showJoinDialog());
+        this.getElement('single-player-btn')?.addEventListener('click', () => this.startSinglePlayer());
+        this.getElement('edit-name-btn')?.addEventListener('click', () => this.changePlayerName());
+
+        this.getElement('start-game-btn')?.addEventListener('click', () => this.startGame());
+        this.getElement('done-button')?.addEventListener('click', () => this.claimWin());
+        this.getElement('next-round-btn')?.addEventListener('click', () => this.nextRound());
+        this.getElement('end-game-btn')?.addEventListener('click', () => this.endGame());
+
+        document.querySelectorAll('.invite-btn, .share-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.shareInvite());
+        });
+
+        document.querySelectorAll('.difficulty-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const difficulty = e.currentTarget.dataset.difficulty;
+                if (difficulty) {
+                    this.setBotDifficulty(difficulty);
+                    
+                    // تحديث الحالة النشطة
+                    document.querySelectorAll('.difficulty-btn').forEach(b => {
+                        b.classList.remove('active');
+                    });
+                    e.currentTarget.classList.add('active');
+                }
+            });
+        });
+    }
+
+    updatePlayerDisplay() {
+        const nameElements = ['player-name-display', 'menu-player-name', 'side-player-name'];
+        nameElements.forEach(id => {
+            const el = this.getElement(id);
+            if (el) el.textContent = this.state.playerName;
+        });
+
+        const avatarElements = document.querySelectorAll('.player-avatar img, #side-avatar, #menu-avatar, #winner-avatar-img');
+        avatarElements.forEach(img => {
+            if (img) {
+                img.src = this.state.avatar;
+                img.onerror = () => {
+                    img.src = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Ccircle cx=\'30\' cy=\'30\' r=\'30\' fill=\'%236C5CE7\'/%3E%3Ctext x=\'30\' y=\'40\' font-size=\'30\' text-anchor=\'middle\' fill=\'white\'%3E🍎%3C/text%3E%3C/svg%3E';
+                };
+            }
+        });
+    }
+
+    changePlayerName() {
+        const newName = prompt('أدخل اسمك الجديد', this.state.playerName);
+        if (newName && newName.trim()) {
+            this.state.playerName = newName.trim();
+            localStorage.setItem('fruitClash_playerName', this.state.playerName);
+            this.updatePlayerDisplay();
+            this.showNotification('✅ تم تحديث الاسم', 'success');
+        }
+    }
+
+    setBotDifficulty(difficulty) {
+        this.state.botDifficulty = difficulty;
+        this.showNotification(`🎮 صعوبة البوت: ${difficulty === 'easy' ? 'سهل' : difficulty === 'medium' ? 'متوسط' : 'صعب'}`, 'info');
+    }
+
+    async createRoom() {
+        this.state.isHost = true;
+        this.state.isSinglePlayer = false;
+        this.state.playerId = this.generatePlayerId();
+        this.state.roomId = this.generateRoomCode();
+        
+        this.state.players[this.state.playerId] = {
+            name: this.state.playerName,
+            avatar: this.state.avatar,
+            isHost: true,
+            isBot: false,
+            joinedAt: new Date().toISOString()
+        };
+
+        this.showScreen('lobby');
+        this.updateLobbyDisplay();
+        this.generateQRCode();
+        this.showNotification('✅ تم إنشاء الغرفة', 'success');
+    }
+
+    generateRoomCode() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for (let i = 0; i < 4; i++) {
+            code += chars[Math.floor(Math.random() * chars.length)];
+        }
+        const codeElement = this.getElement('room-code');
+        if (codeElement) codeElement.textContent = code;
+        return code;
+    }
+
+    showJoinDialog() {
+        const roomCode = prompt('أدخل رمز الغرفة (4 أحرف أو أرقام):');
+        if (roomCode && roomCode.trim()) {
+            this.joinRoom(roomCode.trim().toUpperCase());
+        }
+    }
+
+    async joinRoom(roomCode) {
+        this.state.roomId = roomCode;
+        this.state.playerId = this.generatePlayerId();
+        this.state.isHost = false;
+        this.state.isSinglePlayer = false;
+
+        this.state.players[this.state.playerId] = {
+            name: this.state.playerName,
+            avatar: this.state.avatar,
+            isHost: false,
+            isBot: false,
+            joinedAt: new Date().toISOString()
+        };
+
+        if (!Object.values(this.state.players).some(p => p.isHost)) {
+            this.state.players['host_' + Date.now()] = {
+                name: 'مضيف',
+                avatar: this.generateAvatar(),
+                isHost: true,
+                isBot: false,
+                joinedAt: new Date().toISOString()
+            };
+        }
+
+        this.showScreen('lobby');
+        this.updateLobbyDisplay();
+        this.showNotification('✅ تم الانضمام للغرفة', 'success');
+    }
+
+    updateLobbyDisplay() {
+        this.updatePlayersList();
+        this.updateRoomCode();
+    }
+
+    updateRoomCode() {
+        const codeElement = this.getElement('room-code');
+        if (codeElement) codeElement.textContent = this.state.roomId || '----';
+    }
+
+    updatePlayersList() {
+        const playersGrid = this.getElement('players-grid');
+        if (!playersGrid) return;
+
+        playersGrid.innerHTML = '';
+        const playersArray = Object.entries(this.state.players).map(([id, data]) => ({ id, ...data }));
+
+        const hostPlayer = playersArray.find(p => p.isHost);
+        if (hostPlayer) {
+            playersGrid.appendChild(this.createPlayerCard(hostPlayer, true));
+        }
+
+        playersArray.filter(p => !p.isHost).forEach(player => {
+            playersGrid.appendChild(this.createPlayerCard(player, false));
+        });
+
+        for (let i = playersArray.length; i < this.state.gameData.maxPlayers; i++) {
+            playersGrid.appendChild(this.createEmptyPlayerCard());
+        }
+
+        this.updatePlayerCount(playersArray.length);
+        this.updateStartButton(playersArray.length);
+    }
+
+    createPlayerCard(player, isHost) {
+        const card = document.createElement('div');
+        card.className = `player-card ${isHost ? 'host-card' : ''} ${player.isBot ? 'bot-card' : ''}`;
+        
+        // استخدام صورة مصغرة
+        const avatarSrc = player.avatar.includes('size=') ? player.avatar : `${player.avatar}&size=60`;
+        
+        card.innerHTML = `
+            <div class="player-avatar">
+                <img src="${avatarSrc}" alt="${player.name}" loading="lazy" 
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Ccircle cx=\'30\' cy=\'30\' r=\'30\' fill=\'%236C5CE7\'/%3E%3Ctext x=\'30\' y=\'40\' font-size=\'30\' text-anchor=\'middle\' fill=\'white\'%3E🍎%3C/text%3E%3C/svg%3E'">
+            </div>
+            <div class="player-name">${player.isBot ? '🤖 ' : ''}${player.name}</div>
+            ${isHost ? '<div class="player-badge">المضيف</div>' : ''}
+            ${player.isBot ? '<div class="player-badge bot-badge">روبوت</div>' : ''}
+        `;
+        return card;
+    }
+
+    createEmptyPlayerCard() {
+        const card = document.createElement('div');
+        card.className = 'player-card empty-card';
+        card.innerHTML = `
+            <div class="empty-icon">👤</div>
+            <div class="empty-text">انتظار...</div>
+        `;
+        return card;
+    }
+
+    updatePlayerCount(count) {
+        const countElement = this.getElement('player-count');
+        if (countElement) {
+            countElement.textContent = `${count}/${this.state.gameData.maxPlayers}`;
+        }
+    }
+
+    updateStartButton(playerCount) {
+        const startBtn = this.getElement('start-game-btn');
+        if (!startBtn) return;
+
+        if (this.state.isHost && playerCount >= 2) {
+            startBtn.classList.remove('disabled');
+            startBtn.disabled = false;
+            startBtn.textContent = '🚀 ابدأ اللعبة';
+        } else if (this.state.isHost) {
+            startBtn.classList.add('disabled');
+            startBtn.disabled = true;
+            startBtn.textContent = '⏳ انتظار المزيد';
+        } else {
+            startBtn.classList.add('disabled');
+            startBtn.disabled = true;
+            startBtn.textContent = '⏳ انتظار المضيف';
+        }
+    }
+
+    generateQRCode() {
+        if (!this.state.roomId) return;
+        
+        const roomUrl = `${window.location.origin}${window.location.pathname}?join=${this.state.roomId}`;
+        const canvas = this.getElement('qr-code');
+        const container = this.getElement('qr-code-container');
+
+        if (!canvas || !container) return;
+
+        if (typeof QRCode !== 'undefined') {
+            try {
+                QRCode.toCanvas(canvas, roomUrl, {
+                    width: 120, // تصغير حجم QR
+                    margin: 1,
+                    color: { dark: '#6C5CE7', light: '#FFFFFF' }
+                }, (error) => {
+                    if (error) this.showQRFallback(roomUrl);
+                });
+            } catch (e) {
+                this.showQRFallback(roomUrl);
+            }
+        } else {
+            this.showQRFallback(roomUrl);
+        }
+    }
+
+    showQRFallback(roomUrl) {
+        const container = this.getElement('qr-code-container');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="qr-fallback">
+                <i class="fas fa-link"></i>
+                <p>الرمز: ${this.state.roomId}</p>
+                <button onclick="navigator.clipboard.writeText('${roomUrl}')">
+                    نسخ الرابط
+                </button>
+            </div>
+        `;
+    }
+
+    // ========== وضع اللعب الفردي ==========
+    async startSinglePlayer() {
+        this.state.isSinglePlayer = true;
+        this.state.isHost = true;
+        this.state.roomId = 'AI_' + Date.now().toString().slice(-4);
+        
+        this.state.players = {};
+        
+        // اللاعب الرئيسي
+        this.state.players[this.state.playerId] = {
+            name: this.state.playerName,
+            avatar: this.state.avatar,
+            isHost: true,
+            isBot: false,
+            joinedAt: new Date().toISOString()
+        };
+
+        // 3 روبوتات
+        const botNames = ['روبوت ذكي', 'روبوت سريع', 'روبوت محترف'];
+        for (let i = 0; i < 3; i++) {
+            const botId = `bot_${i}_${Date.now()}`;
+            this.state.players[botId] = {
+                name: botNames[i],
+                avatar: this.generateAvatar(),
+                isHost: false,
+                isBot: true,
+                difficulty: this.state.botDifficulty,
+                joinedAt: new Date().toISOString()
+            };
+        }
+
+        this.showScreen('lobby');
+        this.updateLobbyDisplay();
+        
+        const inviteOptions = document.querySelector('.invite-options');
+        if (inviteOptions) inviteOptions.style.display = 'none';
+
+        this.showNotification('🎮 العب ضد الروبوت', 'success');
+    }
+
+    // ========== بدء اللعبة الحقيقية ==========
+    startGame() {
+        if (this.state.isSinglePlayer) {
+            this.showScreen('game');
+            this.initializeRealGame();
+            this.showNotification('🎮 بدأت اللعبة ضد الروبوت', 'success');
+            return;
+        }
+
+        if (!this.state.isHost) {
+            this.showNotification('❌ فقط المضيف يمكنه بدء اللعبة', 'error');
+            return;
+        }
+
+        const playerCount = Object.keys(this.state.players).length;
+        if (playerCount < 2) {
+            this.showNotification('❌ تحتاج على الأقل لاعبين', 'error');
+            return;
+        }
+
         this.showScreen('game');
-        this.initializeRound(true);
-      }
-    });
-
-    this.firebaseListeners.push(() => roomRef.off('value', onRoomChange));
-  }
-
-  // ===== الانضمام لغرفة في Firebase =====
-  joinFirebaseRoom(roomCode) {
-    if (!this.firebaseInitialized || !this.roomsRef) {
-      this.showNotification('⚠️ Firebase غير متصل. سيتم استخدام الوضع المحلي', 'warning');
-      return false;
+        this.initializeRealGame();
+        this.showNotification('🎮 بدأت اللعبة!', 'success');
     }
 
-    const roomRef = this.roomsRef.child(roomCode);
+    // تهيئة لعبة حقيقية مع تبادل البطاقات
+    initializeRealGame() {
+        this.state.gameData.gameActive = true;
+        this.state.gameData.roundWinner = null;
+        this.state.gameData.currentRound = 1;
+        this.state.gameData.startTime = Date.now();
+        this.state.gamePhase = 'playing';
+        this.state.gameData.turnIndex = 0;
+        
+        this.initializeDeck();
+        this.dealInitialCards();
+        this.startTimer(this.state.gameData.roundTime);
+        this.updateGameUI();
 
-    roomRef.once('value').then((snapshot) => {
-      const roomData = snapshot.val();
-      
-      if (!roomData) {
-        this.showNotification('❌ الغرفة غير موجودة', 'error');
-        return false;
-      }
+        if (this.state.isSinglePlayer) {
+            this.startBotActions();
+        }
+    }
 
-      if (Object.keys(roomData.players).length >= roomData.maxPlayers) {
-        this.showNotification('❌ الغرفة ممتلئة', 'error');
-        return false;
-      }
-
-      // إضافة اللاعب للغرفة
-      const playerData = {
-        name: this.state.playerName,
-        avatar: this.state.avatar,
-        isHost: false,
-        joinedAt: firebase.database.ServerValue.TIMESTAMP
-      };
-
-      roomRef.child('players').child(this.state.playerId).set(playerData)
-        .then(() => {
-          console.log('✅ Joined room in Firebase:', roomCode);
-          this.listenToRoomChanges(roomCode);
-          return true;
-        })
-        .catch((error) => {
-          console.error('❌ Error joining room in Firebase:', error);
-          return false;
+    // إنشاء وتوزيع البطاقات
+    initializeDeck() {
+        // إنشاء 52 بطاقة (4 من كل نوع)
+        const deck = [];
+        this.state.gameData.fruits.forEach((fruit, index) => {
+            for (let i = 0; i < 4; i++) {
+                deck.push({
+                    id: `card_${fruit}_${i}_${Date.now()}`,
+                    emoji: fruit,
+                    name: this.fruitsNames[fruit],
+                    fruitId: index
+                });
+            }
         });
-    });
-
-    return true;
-  }
-
-  // ===== تحديث حالة اللعبة في Firebase =====
-  updateGameStateInFirebase(gameState) {
-    if (!this.firebaseInitialized || !this.state.roomId || !this.roomsRef) return;
-
-    const roomRef = this.roomsRef.child(this.state.roomId);
-    
-    roomRef.update({
-      gameState: gameState,
-      status: gameState.gameActive ? 'playing' : 'finished'
-    }).catch((error) => {
-      console.error('❌ Error updating game state in Firebase:', error);
-    });
-  }
-
-  // ===== تسجيل الدخول بحساب Google =====
-  async signInWithGoogle() {
-    if (!this.firebaseInitialized) {
-      this.showNotification('⚠️ Firebase غير متصل', 'warning');
-      return;
+        
+        // خلط البطاقات
+        this.state.gameData.deck = this.shuffleArray(deck);
     }
 
-    try {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      const result = await firebase.auth().signInWithPopup(provider);
-      
-      const user = result.user;
-      
-      // تحديث بيانات اللاعب
-      this.state.playerName = user.displayName || this.state.playerName;
-      this.state.avatar = user.photoURL || this.state.avatar;
-      
-      localStorage.setItem('fruitClash_playerName', this.state.playerName);
-      
-      this.updatePlayerDisplay();
-      this.showNotification('✅ تم تسجيل الدخول بنجاح', 'success');
-      
-    } catch (error) {
-      console.error('❌ Google Sign-In error:', error);
-      this.showNotification('❌ فشل تسجيل الدخول', 'error');
-    }
-  }
-
-  // ===== تسجيل الخروج =====
-  async signOut() {
-    if (!this.firebaseInitialized) return;
-
-    try {
-      await firebase.auth().signOut();
-      this.showNotification('✅ تم تسجيل الخروج', 'success');
-    } catch (error) {
-      console.error('❌ Sign-out error:', error);
-    }
-  }
-
-  // ===== رفع صورة شخصية للتخزين السحابي =====
-  async uploadAvatar(file) {
-    if (!this.firebaseInitialized) {
-      this.showNotification('⚠️ Firebase غير متصل', 'warning');
-      return;
+    shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
     }
 
-    try {
-      const storage = firebase.storage();
-      const storageRef = storage.ref();
-      const avatarRef = storageRef.child(`avatars/${this.state.playerId}`);
-
-      await avatarRef.put(file);
-      const downloadUrl = await avatarRef.getDownloadURL();
-
-      // تحديث الصورة الشخصية
-      this.state.avatar = downloadUrl;
-      
-      // تحديث في قاعدة البيانات
-      if (this.leaderboardRef) {
-        await this.leaderboardRef.child(this.state.playerId).update({
-          avatar: downloadUrl
+    dealInitialCards() {
+        const playerIds = Object.keys(this.state.players);
+        const cardsPerPlayer = 4;
+        
+        // توزيع 4 بطاقات لكل لاعب
+        playerIds.forEach((playerId, index) => {
+            const playerCards = [];
+            for (let i = 0; i < cardsPerPlayer; i++) {
+                if (this.state.gameData.deck.length > 0) {
+                    playerCards.push(this.state.gameData.deck.pop());
+                }
+            }
+            this.state.gameData.playersCards[playerId] = playerCards;
         });
-      }
 
-      this.updatePlayerDisplay();
-      this.showNotification('✅ تم رفع الصورة بنجاح', 'success');
-
-    } catch (error) {
-      console.error('❌ Avatar upload error:', error);
-      this.showNotification('❌ فشل رفع الصورة', 'error');
-    }
-  }
-
-  // ===== تحميل إحصائيات اللاعبين من Firebase =====
-  async loadPlayerStats(playerId) {
-    if (!this.firebaseInitialized || !this.leaderboardRef) return null;
-
-    try {
-      const snapshot = await this.leaderboardRef.child(playerId).once('value');
-      return snapshot.val();
-    } catch (error) {
-      console.error('Error loading player stats:', error);
-      return null;
-    }
-  }
-
-  // ===== تحديث updateStats لحفظ النتائج في Firebase =====
-  updateStats(type, value) {
-    if (!this.state.stats) this.state.stats = this.loadStats();
-
-    if (type === 'win') {
-      this.state.stats.wins += 1;
-      this.state.stats.winStreak += 1;
-      this.state.stats.gamesPlayed += 1;
-      if (!this.state.stats.fastestWin || value < this.state.stats.fastestWin) {
-        this.state.stats.fastestWin = value;
-      }
-    } else if (type === 'loss') {
-      this.state.stats.winStreak = 0;
-      this.state.stats.gamesPlayed += 1;
+        // عرض بطاقات اللاعب
+        this.displayMyCards(this.state.gameData.playersCards[this.state.playerId]);
+        this.displayPlayersProgress();
     }
 
-    this.state.stats.lastPlayed = new Date().toISOString();
+    displayMyCards(cards) {
+        const container = this.getElement('cards-container');
+        if (!container) return;
 
-    try {
-      localStorage.setItem('fruitClash_stats', JSON.stringify(this.state.stats));
-      
-      // حفظ في Firebase إذا كان متصلاً
-      if (this.firebaseInitialized) {
-        this.saveGameResultToFirebase();
-      }
-    } catch (_) {}
-  }
+        container.innerHTML = '';
 
-  // ===== override createRoom لاستخدام Firebase =====
-  createRoom() {
-    this.gameMode = 'online';
-    this.aiPlayers = [];
+        cards.forEach((card, index) => {
+            const cardEl = document.createElement('div');
+            cardEl.className = 'modern-card';
+            cardEl.style.animationDelay = `${index * 0.1}s`;
+            cardEl.innerHTML = `
+                <div class="card-emoji">${card.emoji}</div>
+                <div class="card-name">${card.name}</div>
+            `;
+            cardEl.addEventListener('click', () => this.onCardClick(card, index));
+            container.appendChild(cardEl);
+        });
 
-    this.state.isHost = true;
-    this.state.playerId = this.generatePlayerId();
-    this.state.roomId = this.generateRoomCode();
-    this.state.players = {};
-    this.ensureSelfInPlayers(true);
-
-    // إنشاء غرفة في Firebase إذا كان متصلاً
-    if (this.firebaseInitialized) {
-      this.createFirebaseRoom();
+        this.updateCardsCount(cards.length);
+        this.checkForFourOfAKind(cards);
     }
 
-    this.showScreen('lobby');
-    this.generateQRCode();
-    this.updateLobbyDisplay();
-    this.showNotification('✅ تم إنشاء الغرفة بنجاح', 'success');
-  }
+    onCardClick(card, index) {
+        if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) {
+            this.showNotification('اللعبة غير نشطة', 'warning');
+            return;
+        }
 
-  // ===== override joinRoom لاستخدام Firebase =====
-  joinRoom(roomCode) {
-    this.gameMode = 'online';
-    this.aiPlayers = [];
-
-    this.state.roomId = roomCode;
-    this.state.playerId = this.generatePlayerId();
-    this.state.isHost = false;
-    this.state.players = {};
-    this.ensureSelfInPlayers(false);
-
-    // الانضمام للغرفة في Firebase إذا كان متصلاً
-    if (this.firebaseInitialized) {
-      this.joinFirebaseRoom(roomCode);
-    } else {
-      // محاكاة وجود مضيف في الوضع المحلي
-      const hostId = `host_${Date.now()}`;
-      this.state.players[hostId] = {
-        name: 'المضيف',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=host',
-        isHost: true,
-        isAI: false,
-        joinedAt: new Date().toISOString()
-      };
+        // في اللعبة الحقيقية، النقر على البطاقة يسمح بتبادلها
+        if (confirm(`هل تريد التخلص من ${card.name} وسحب بطاقة جديدة؟`)) {
+            this.exchangeCard(index);
+        }
     }
 
-    this.showScreen('lobby');
-    this.generateQRCode();
-    this.updateLobbyDisplay();
-    this.showNotification('✅ تم الانضمام للغرفة', 'success');
-  }
+    // تبادل بطاقة (سحب بطاقة جديدة من الكومة)
+    exchangeCard(cardIndex) {
+        const myCards = this.state.gameData.playersCards[this.state.playerId];
+        
+        if (this.state.gameData.deck.length === 0) {
+            this.showNotification('لا يوجد بطاقات في الكومة', 'warning');
+            return;
+        }
 
-  // ===== override initializeRound لتحديث Firebase =====
-  initializeRound(resetRoundNumber = false) {
-    if (resetRoundNumber) this.state.gameData.currentRound = 1;
+        // إزالة البطاقة القديمة وإضافة بطاقة جديدة
+        const oldCard = myCards[cardIndex];
+        const newCard = this.state.gameData.deck.pop();
+        myCards[cardIndex] = newCard;
 
-    this.state.gameData.gameActive = true;
-    this.state.gameData.roundWinner = null;
-    this.state.gameData.startTime = Date.now();
-    this.state.gameData.playersCards = {};
-    
-    this.gameStarted = true;
-    this.canClaimWin = false;
+        // إعادة البطاقة القديمة إلى الكومة (اختياري - يمكن وضعها في كومة الرمي)
+        this.state.gameData.deck.unshift(oldCard);
 
-    this.dealCards();
+        // تحديث العرض
+        this.displayMyCards(myCards);
+        this.displayPlayersProgress();
+        
+        // التحقق من الفوز بعد التبادل
+        this.checkForFourOfAKind(myCards);
+        
+        this.showNotification(`🔄 تم التبادل: ${oldCard.name} ← ${newCard.name}`, 'info');
 
-    // تحديث حالة اللعبة في Firebase
-    if (this.firebaseInitialized && this.state.roomId) {
-      this.updateGameStateInFirebase(this.state.gameData);
+        // إذا كان في وضع متعدد اللاعبين، ننتقل للاعب التالي
+        if (!this.state.isSinglePlayer) {
+            this.nextPlayer();
+        }
     }
 
-    setTimeout(() => {
-      if (this.state.gameData.gameActive) {
-        this.canClaimWin = true;
-        console.log('✅ يمكن الآن المطالبة بالفوز');
-        this.updateWinButtonState();
-      }
-    }, 2000);
-
-    this.startTimer(this.state.gameData.roundTime);
-    this.updateGameUI();
-
-    if (this.gameMode === 'single') {
-      this.startAIThinking();
-    }
-  }
-
-  // ===== override claimWin لتحديث Firebase =====
-  claimWin() {
-    if (!this.canClaimWin) {
-      this.showNotification('⏳ انتظر قليلاً قبل المطالبة بالفوز', 'warning');
-      return;
-    }
-    
-    if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) {
-      return;
+    // الانتقال للاعب التالي
+    nextPlayer() {
+        const playerIds = Object.keys(this.state.players);
+        this.state.gameData.turnIndex = (this.state.gameData.turnIndex + 1) % playerIds.length;
+        
+        const currentPlayerId = playerIds[this.state.gameData.turnIndex];
+        const currentPlayer = this.state.players[currentPlayerId];
+        
+        this.showNotification(`🎮 دور: ${currentPlayer.name}`, 'info');
     }
 
-    const myCards = this.state.gameData.playersCards[this.state.playerId];
-    const counts = {};
-    myCards.forEach(card => {
-      counts[card.emoji] = (counts[card.emoji] || 0) + 1;
-    });
-    
-    const hasFour = Object.values(counts).some(count => count >= 4);
-    
-    if (!hasFour) {
-      this.showNotification('❌ ليس لديك 4 بطاقات متطابقة', 'error');
-      return;
+    checkForFourOfAKind(cards) {
+        const counts = {};
+        cards.forEach(card => {
+            counts[card.emoji] = (counts[card.emoji] || 0) + 1;
+        });
+
+        const hasFour = Object.values(counts).some(count => count >= 4);
+        const winButton = this.getElement('done-button');
+
+        if (winButton) {
+            if (hasFour) {
+                winButton.classList.remove('disabled');
+                winButton.disabled = false;
+                this.animateWinButton();
+                this.showNotification('🎉 لديك 4 متطابقة! اضغط للفوز', 'success');
+            } else {
+                winButton.classList.add('disabled');
+                winButton.disabled = true;
+            }
+        }
+
+        return hasFour;
     }
 
-    this.triggerHaptic('heavy');
-    this.launchConfetti();
-    this.handleWin(this.state.playerId);
-  }
+    displayPlayersProgress() {
+        const container = this.getElement('players-progress');
+        if (!container) return;
 
-  // ===== override handleWin لتحديث Firebase =====
-  handleWin(playerId) {
-    this.state.gameData.roundWinner = playerId;
-    this.state.gameData.gameActive = false;
-    this.stopTimer();
-
-    const winTime = Math.max(0, Math.floor((Date.now() - this.state.gameData.startTime) / 1000));
-
-    if (playerId === this.state.playerId) {
-      this.updateStats('win', winTime);
-    } else if (this.gameMode === 'single') {
-      this.updateStats('loss', winTime);
-    }
-
-    // تحديث حالة اللعبة في Firebase
-    if (this.firebaseInitialized && this.state.roomId) {
-      this.updateGameStateInFirebase(this.state.gameData);
-    }
-
-    this.showWinnerModal(playerId, winTime);
-    this.playSound('win');
-    this.launchConfetti();
-  }
-
-  // ===== override leaveRoom لتنظيف Firebase =====
-  leaveRoom() {
-    // تنظيف مستمعي Firebase
-    this.firebaseListeners.forEach(unsub => unsub());
-    this.firebaseListeners = [];
-
-    // إزالة اللاعب من الغرفة في Firebase
-    if (this.firebaseInitialized && this.state.roomId && this.roomsRef) {
-      const roomRef = this.roomsRef.child(this.state.roomId);
-      
-      roomRef.child('players').child(this.state.playerId).remove()
-        .then(() => {
-          // التحقق إذا كانت الغرفة فارغة لحذفها
-          return roomRef.child('players').once('value');
-        })
-        .then((snapshot) => {
-          if (!snapshot.exists() || snapshot.numChildren() === 0) {
-            return roomRef.remove();
-          }
-        })
-        .catch((error) => {
-          console.error('Error cleaning up room:', error);
+        container.innerHTML = '';
+        
+        Object.entries(this.state.gameData.playersCards).forEach(([playerId, cards]) => {
+            const playerInfo = this.state.players[playerId] || { name: 'خصم', avatar: this.generateAvatar() };
+            const maxSame = this.getMaxSameCards(cards);
+            const progress = (maxSame / 4) * 100;
+            
+            // تصغير حجم الصورة
+            const avatarSrc = playerInfo.avatar.includes('size=') ? playerInfo.avatar : `${playerInfo.avatar}&size=40`;
+            
+            const progressEl = document.createElement('div');
+            progressEl.className = `player-progress-item ${playerId === this.state.gameData.roundWinner ? 'winner' : ''} ${playerInfo.isBot ? 'bot-player' : ''}`;
+            progressEl.innerHTML = `
+                <div class="progress-avatar">
+                    <img src="${avatarSrc}" alt="${playerInfo.name}" loading="lazy"
+                         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'40\' height=\'40\' viewBox=\'0 0 40 40\'%3E%3Ccircle cx=\'20\' cy=\'20\' r=\'20\' fill=\'%236C5CE7\'/%3E%3Ctext x=\'20\' y=\'28\' font-size=\'20\' text-anchor=\'middle\' fill=\'white\'%3E🍎%3C/text%3E%3C/svg%3E'">
+                    ${playerInfo.isBot ? '<span class="bot-badge">روبوت</span>' : ''}
+                </div>
+                <div class="progress-name">${playerInfo.isBot ? '🤖 ' : ''}${playerInfo.name}</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: ${progress}%"></div>
+                </div>
+                <div class="progress-count">${maxSame}/4</div>
+            `;
+            
+            container.appendChild(progressEl);
         });
     }
 
-    this.state.roomId = null;
-    this.state.isHost = false;
-    this.state.players = {};
-    this.state.gameData.playersCards = {};
-    this.state.gameData.gameActive = false;
+    getMaxSameCards(cards) {
+        if (!cards || cards.length === 0) return 0;
+        const counts = {};
+        cards.forEach(card => {
+            counts[card.emoji] = (counts[card.emoji] || 0) + 1;
+        });
+        return Math.max(...Object.values(counts), 0);
+    }
 
-    this.aiPlayers = [];
-    this.gameMode = 'online';
+    // ========== حركة الروبوت ==========
+    startBotActions() {
+        if (this.botInterval) {
+            clearInterval(this.botInterval);
+        }
 
-    this.stopTimer();
-    this.showScreen('main-menu');
-    this.showNotification('👋 تم الرجوع للقائمة الرئيسية', 'info');
-  }
+        let botSpeed;
+        switch(this.state.botDifficulty) {
+            case 'easy': botSpeed = 4000; break;
+            case 'hard': botSpeed = 1500; break;
+            default: botSpeed = 2500;
+        }
+
+        this.botInterval = setInterval(() => {
+            if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) {
+                return;
+            }
+
+            // اختيار روبوت عشوائي ليتحرك
+            const botPlayers = Object.entries(this.state.players)
+                .filter(([id, player]) => player.isBot);
+
+            if (botPlayers.length === 0) return;
+
+            const randomBot = botPlayers[Math.floor(Math.random() * botPlayers.length)];
+            const botId = randomBot[0];
+            const botCards = this.state.gameData.playersCards[botId];
+
+            if (!botCards) return;
+
+            this.makeBotDecision(botId, botCards);
+
+        }, botSpeed);
+    }
+
+    makeBotDecision(botId, botCards) {
+        // حساب البطاقات المتطابقة
+        const counts = {};
+        botCards.forEach(card => {
+            counts[card.emoji] = (counts[card.emoji] || 0) + 1;
+        });
+
+        const maxCount = Math.max(...Object.values(counts), 0);
+        
+        // قرار الفوز
+        let shouldWin = false;
+        
+        switch(this.state.botDifficulty) {
+            case 'easy':
+                shouldWin = maxCount >= 4;
+                break;
+            case 'medium':
+                shouldWin = maxCount >= 4 || (maxCount >= 3 && Math.random() > 0.6);
+                break;
+            case 'hard':
+                shouldWin = maxCount >= 3 && Math.random() > 0.3;
+                break;
+        }
+
+        if (shouldWin && maxCount >= 3) {
+            setTimeout(() => {
+                if (this.state.gameData.gameActive && !this.state.gameData.roundWinner) {
+                    this.handleWin(botId);
+                    this.showNotification(`🤖 ${this.state.players[botId].name} فاز!`, 'info');
+                }
+            }, 500 + Math.random() * 1000);
+        } else {
+            // البوت يبادل بطاقة عشوائية
+            this.botExchangeCard(botId, botCards);
+        }
+    }
+
+    botExchangeCard(botId, botCards) {
+        if (this.state.gameData.deck.length === 0) return;
+
+        // اختيار بطاقة عشوائية للتبادل
+        const cardIndex = Math.floor(Math.random() * botCards.length);
+        const oldCard = botCards[cardIndex];
+        const newCard = this.state.gameData.deck.pop();
+        
+        botCards[cardIndex] = newCard;
+        this.state.gameData.deck.unshift(oldCard);
+
+        // تحديث العرض
+        this.displayPlayersProgress();
+    }
+
+    claimWin() {
+        if (!this.state.gameData.gameActive || this.state.gameData.roundWinner) {
+            this.showNotification('لا يمكن الفوز الآن', 'warning');
+            return;
+        }
+
+        const myCards = this.state.gameData.playersCards[this.state.playerId];
+        const hasFour = this.checkForFourOfAKind(myCards);
+
+        if (!hasFour) {
+            this.showNotification('❌ ليس لديك 4 بطاقات متطابقة!', 'error');
+            return;
+        }
+
+        this.triggerHaptic('heavy');
+        this.launchConfetti();
+        this.handleWin(this.state.playerId);
+    }
+
+    handleWin(playerId) {
+        this.state.gameData.roundWinner = playerId;
+        this.state.gameData.gameActive = false;
+        this.state.gamePhase = 'finished';
+        this.stopTimer();
+
+        if (this.botInterval) {
+            clearInterval(this.botInterval);
+            this.botInterval = null;
+        }
+
+        const winTime = Math.floor((Date.now() - this.state.gameData.startTime) / 1000);
+        
+        if (playerId === this.state.playerId) {
+            this.updateStats('win', winTime);
+        }
+
+        this.showWinnerModal(playerId, winTime);
+        this.playSound('win');
+    }
+
+    showWinnerModal(playerId, winTime) {
+        const isMe = playerId === this.state.playerId;
+        const player = this.state.players[playerId];
+        
+        let winnerName = isMe ? this.state.playerName : (player?.name || 'الخصم');
+        if (player?.isBot) winnerName = '🤖 ' + winnerName;
+        
+        const titleEl = this.getElement('result-title');
+        const messageEl = this.getElement('result-message');
+        const timeEl = this.getElement('round-time');
+        const streakEl = this.getElement('win-streak');
+
+        if (titleEl) titleEl.textContent = isMe ? '🎉 أنت الفائز!' : `🎉 ${winnerName}`;
+        if (messageEl) messageEl.textContent = `جمع 4 بطاقات في ${winTime} ثانية`;
+        if (timeEl) timeEl.textContent = `${winTime}s`;
+        if (streakEl) streakEl.textContent = this.state.stats?.winStreak || '0';
+
+        // تحديث صورة الفائز
+        const winnerImg = this.getElement('winner-avatar-img');
+        if (winnerImg && player) {
+            winnerImg.src = player.avatar.includes('size=') ? player.avatar : `${player.avatar}&size=80`;
+        }
+
+        const modal = this.getElement('result-modal');
+        if (modal) modal.classList.remove('hidden');
+
+        this.launchConfetti();
+        if (isMe) this.triggerHaptic('success');
+    }
+
+    nextRound() {
+        const modal = this.getElement('result-modal');
+        if (modal) modal.classList.add('hidden');
+
+        this.state.gameData.currentRound++;
+        this.initializeRealGame();
+    }
+
+    endGame() {
+        const modal = this.getElement('result-modal');
+        if (modal) modal.classList.add('hidden');
+
+        if (this.botInterval) {
+            clearInterval(this.botInterval);
+            this.botInterval = null;
+        }
+
+        this.leaveRoom();
+    }
+
+    startTimer(seconds) {
+        let timeLeft = seconds;
+        const totalDash = 283;
+        const timerProgress = this.getElement('timer-progress');
+        const gameTimer = this.getElement('game-timer');
+        const roundNumber = this.getElement('round-number');
+
+        this.stopTimer();
+
+        if (roundNumber) roundNumber.textContent = this.state.gameData.currentRound;
+
+        this.timerInterval = setInterval(() => {
+            timeLeft--;
+            
+            if (gameTimer) gameTimer.textContent = timeLeft;
+            
+            if (timerProgress) {
+                const progress = totalDash * (timeLeft / seconds);
+                timerProgress.style.strokeDashoffset = totalDash - progress;
+            }
+
+            if (timeLeft <= 10) {
+                document.querySelector('.timer-text')?.classList.add('urgent');
+            }
+
+            if (timeLeft <= 0) {
+                this.endRound();
+            }
+        }, 1000);
+    }
+
+    stopTimer() {
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
+    }
+
+    endRound() {
+        this.stopTimer();
+        this.state.gameData.gameActive = false;
+        this.state.gamePhase = 'finished';
+
+        if (this.botInterval) {
+            clearInterval(this.botInterval);
+            this.botInterval = null;
+        }
+
+        // تحديد الفائز (صاحب أكبر عدد)
+        let maxCount = 0;
+        let winner = null;
+
+        Object.entries(this.state.gameData.playersCards).forEach(([playerId, cards]) => {
+            const playerMax = this.getMaxSameCards(cards);
+            if (playerMax > maxCount) {
+                maxCount = playerMax;
+                winner = playerId;
+            }
+        });
+
+        if (winner) {
+            this.handleWin(winner);
+        } else {
+            this.showNotification('⏱️ انتهى الوقت! لا فائز', 'info');
+            this.showWinnerModal(null, this.state.gameData.roundTime);
+        }
+    }
+
+    animateWinButton() {
+        const btn = this.getElement('done-button');
+        if (btn) {
+            btn.style.animation = 'pulse 0.5s infinite';
+            setTimeout(() => {
+                btn.style.animation = '';
+            }, 3000);
+        }
+    }
+
+    launchConfetti() {
+        if (typeof confetti !== 'undefined') {
+            confetti({
+                particleCount: 80,
+                spread: 60,
+                origin: { y: 0.6 },
+                colors: ['#6C5CE7', '#00D2FF', '#FF7675']
+            });
+        }
+    }
+
+    triggerHaptic(intensity = 'light') {
+        if (!window.navigator.vibrate) return;
+
+        const patterns = {
+            light: [10],
+            medium: [30, 10, 30],
+            heavy: [50, 20, 50],
+            success: [100, 50, 200]
+        };
+
+        try {
+            window.navigator.vibrate(patterns[intensity] || patterns.light);
+        } catch (e) {}
+    }
+
+    playSound(type) {
+        // يمكن إضافة أصوات لاحقاً
+    }
+
+    showNotification(message, type = 'info') {
+        // إزالة الإشعارات السابقة
+        const oldToasts = document.querySelectorAll('.toast-message');
+        oldToasts.forEach(toast => toast.remove());
+
+        const toast = document.createElement('div');
+        toast.className = `toast-message toast-${type}`;
+        
+        const icons = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            info: 'fa-info-circle',
+            warning: 'fa-exclamation-triangle'
+        };
+
+        toast.innerHTML = `
+            <i class="fas ${icons[type] || icons.info}"></i>
+            <span>${message}</span>
+        `;
+
+        document.body.appendChild(toast);
+
+        setTimeout(() => toast.classList.add('show'), 10);
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 2500);
+    }
+
+    shareInvite() {
+        if (!this.state.roomId || this.state.isSinglePlayer) {
+            this.showNotification('❌ لا توجد غرفة نشطة', 'error');
+            return;
+        }
+
+        const roomUrl = `${window.location.origin}${window.location.pathname}?join=${this.state.roomId}`;
+        
+        if (navigator.share) {
+            navigator.share({
+                title: 'Fruit Clash',
+                text: `تعال العب معي! الرمز: ${this.state.roomId}`,
+                url: roomUrl
+            }).catch(() => {
+                this.copyToClipboard(roomUrl);
+            });
+        } else {
+            this.copyToClipboard(roomUrl);
+        }
+    }
+
+    copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            this.showNotification('✅ تم النسخ', 'success');
+        }).catch(() => {
+            this.showNotification('❌ فشل النسخ', 'error');
+        });
+    }
+
+    loadStats() {
+        try {
+            const saved = localStorage.getItem('fruitClash_stats');
+            return saved ? JSON.parse(saved) : {
+                gamesPlayed: 0,
+                wins: 0,
+                fastestWin: null,
+                winStreak: 0
+            };
+        } catch (e) {
+            return {
+                gamesPlayed: 0,
+                wins: 0,
+                fastestWin: null,
+                winStreak: 0
+            };
+        }
+    }
+
+    updateStats(type, value) {
+        if (!this.state.stats) {
+            this.state.stats = this.loadStats();
+        }
+
+        if (type === 'win') {
+            this.state.stats.wins++;
+            this.state.stats.winStreak++;
+            this.state.stats.gamesPlayed++;
+            
+            if (!this.state.stats.fastestWin || value < this.state.stats.fastestWin) {
+                this.state.stats.fastestWin = value;
+            }
+        }
+
+        localStorage.setItem('fruitClash_stats', JSON.stringify(this.state.stats));
+    }
+
+    simulateOnlineCount() {
+        const updateCounts = () => {
+            const onlineEl = this.getElement('online-count');
+            const gamesEl = this.getElement('games-count');
+
+            if (onlineEl) {
+                onlineEl.textContent = Math.floor(Math.random() * 300) + 100;
+            }
+
+            if (gamesEl) {
+                const games = Math.floor(Math.random() * 2000) + 500;
+                gamesEl.textContent = games > 1000 ? (games / 1000).toFixed(1) + 'k' : games;
+            }
+        };
+
+        updateCounts();
+        setInterval(updateCounts, 15000);
+    }
+
+    startBackgroundAnimation() {
+        // تأثير بسيط للخلفية
+    }
+
+    updateGameUI() {
+        const roundEl = this.getElement('round-number');
+        if (roundEl) roundEl.textContent = this.state.gameData.currentRound;
+    }
+
+    showScreen(screenName) {
+        document.querySelectorAll('.screen').forEach(screen => {
+            screen.classList.add('hidden');
+        });
+
+        const screenMap = {
+            'main-menu': 'main-menu',
+            'lobby': 'lobby-screen',
+            'game': 'game-screen'
+        };
+
+        const targetId = screenMap[screenName] || screenName;
+        const targetScreen = this.getElement(targetId);
+
+        if (targetScreen) {
+            targetScreen.classList.remove('hidden');
+            
+            if (screenName === 'lobby') {
+                this.updateLobbyDisplay();
+            }
+        }
+    }
+
+    async leaveRoom() {
+        this.state.roomId = null;
+        this.state.isHost = false;
+        this.state.isSinglePlayer = false;
+        this.state.players = {};
+        this.state.gameData.playersCards = {};
+        this.state.gameData.gameActive = false;
+        
+        if (this.botInterval) {
+            clearInterval(this.botInterval);
+            this.botInterval = null;
+        }
+        
+        this.stopTimer();
+        this.showScreen('main-menu');
+        
+        const inviteOptions = document.querySelector('.invite-options');
+        if (inviteOptions) inviteOptions.style.display = 'flex';
+
+        this.showNotification('👋 تم الخروج', 'info');
+    }
 }
 
-// ===== واجهات عامة للـ HTML =====
-window.game = window.game || null;
+// الدوال العامة
+window.game = null;
 
 function initializeGame() {
-  if (!window.game) window.game = new ModernGame();
-  return window.game;
+    if (!window.game) {
+        window.game = new ModernGame();
+    }
+    return window.game;
 }
 
 function goBack() {
-  initializeGame().showScreen('main-menu');
+    const game = window.game || initializeGame();
+    game.showScreen('main-menu');
 }
 
 function copyRoomCode() {
-  const game = initializeGame();
-  const code = document.getElementById('room-code')?.textContent;
-  if (code && code !== '----') game.copyToClipboard(code);
+    const game = window.game || initializeGame();
+    const code = document.getElementById('room-code')?.textContent;
+    if (code) game.copyToClipboard(code);
 }
 
 function showGameMenu() {
-  document.getElementById('side-menu')?.classList.remove('hidden');
+    document.getElementById('side-menu')?.classList.remove('hidden');
 }
 
 function closeSideMenu() {
-  document.getElementById('side-menu')?.classList.add('hidden');
+    document.getElementById('side-menu')?.classList.add('hidden');
 }
 
 function quickJoinRandom() {
-  initializeGame().showJoinDialog();
+    const game = window.game || initializeGame();
+    game.showJoinDialog();
 }
 
 function openTutorial() {
-  initializeGame().showNotification('📚 شرح اللعبة قيد الإعداد', 'info');
+    const game = window.game || initializeGame();
+    game.showNotification('اجمع 4 بطاقات متطابقة للفوز! اضغط على أي بطاقة لتبديلها', 'info');
 }
 
 function showStats() {
-  const game = initializeGame();
-  const s = game.state.stats || game.loadStats();
-  const msg = `📊 إحصائياتك:\n🎮 الألعاب: ${s.gamesPlayed || 0}\n🏆 الفوز: ${s.wins || 0}\n⚡ أسرع فوز: ${
-    s.fastestWin ?? '--'
-  } ثانية\n🔥 الفوز المتتالي: ${s.winStreak || 0}`;
-  game.showNotification(msg, 'info');
+    const game = window.game || initializeGame();
+    const stats = game.state.stats;
+    
+    game.showNotification(`📊 الألعاب: ${stats.gamesPlayed} | 🏆 الفوز: ${stats.wins} | ⚡ أسرع: ${stats.fastestWin || '--'}ث`, 'info');
 }
 
 function leaveGame() {
-  if (confirm('هل تريد الخروج؟')) {
-    initializeGame().leaveRoom();
-    closeSideMenu();
-  }
+    if (confirm('هل أنت متأكد؟')) {
+        const game = window.game || initializeGame();
+        game.leaveRoom();
+        closeSideMenu();
+    }
 }
 
 function shareInvite() {
-  initializeGame().shareInvite();
+    const game = window.game || initializeGame();
+    game.shareInvite();
 }
 
 function showSettings() {
-  initializeGame().showNotification('⚙️ الإعدادات قيد التطوير', 'info');
+    const game = window.game || initializeGame();
+    game.showNotification('⚙️ قيد التطوير', 'info');
 }
 
 function showHowToPlay() {
-  initializeGame().showNotification('📖 اجمع 4 بطاقات متطابقة للفوز!', 'info');
+    const game = window.game || initializeGame();
+    game.showNotification('🎯 اضغط على بطاقة لتبديلها، اجمع 4 متطابقة للفوز!', 'info');
 }
 
 function shareApp() {
-  const game = initializeGame();
-  if (navigator.share) {
-    navigator
-      .share({ title: 'Fruit Clash', text: 'لعبة الفواكه الأربعة', url: window.location.href })
-      .catch(() => game.copyToClipboard(window.location.href));
-  } else {
-    game.copyToClipboard(window.location.href);
-  }
-}
-
-function showDifficultyModal() {
-  document.getElementById('difficulty-modal')?.classList.remove('hidden');
-}
-
-function closeDifficultyModal() {
-  document.getElementById('difficulty-modal')?.classList.add('hidden');
-}
-
-// دوال Firebase الجديدة
-function signInWithGoogle() {
-  initializeGame().signInWithGoogle();
-}
-
-function signOut() {
-  initializeGame().signOut();
-}
-
-function showLeaderboard() {
-  const game = initializeGame();
-  const modal = document.getElementById('leaderboard-modal');
-  if (modal) {
-    game.displayLeaderboard();
-    modal.classList.remove('hidden');
-  }
-}
-
-function closeLeaderboard() {
-  document.getElementById('leaderboard-modal')?.classList.add('hidden');
-}
-
-function uploadAvatar() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      initializeGame().uploadAvatar(file);
+    const game = window.game || initializeGame();
+    if (navigator.share) {
+        navigator.share({
+            title: 'Fruit Clash',
+            text: 'لعبة الفواكه الأربعة',
+            url: window.location.href
+        }).catch(() => {
+            game.copyToClipboard(window.location.href);
+        });
+    } else {
+        game.copyToClipboard(window.location.href);
     }
-  };
-  input.click();
+}
+
+function setDifficulty(difficulty) {
+    const game = window.game || initializeGame();
+    game.setBotDifficulty(difficulty);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  try {
     initializeGame();
-  } catch (e) {
-    console.error('Init error:', e);
-  }
 });
-
-document.addEventListener('contextmenu', (e) => e.preventDefault());
-document.addEventListener('selectstart', (e) => e.preventDefault());
