@@ -1,0 +1,28 @@
+{
+  "database": {
+    "rules": {
+      "rooms": {
+        ".read": true,
+        ".write": true,
+        "$roomId": {
+          ".validate": "newData.hasChildren(['code', 'hostId', 'createdAt'])",
+          "players": {
+            "$playerId": {
+              ".validate": "newData.hasChildren(['id', 'name', 'joinedAt'])"
+            }
+          },
+          "gameState": {
+            ".validate": "newData.isObject()"
+          }
+        }
+      },
+      "players": {
+        "$playerId": {
+          ".read": true,
+          ".write": "auth == null || $playerId === auth.uid",
+          ".validate": "newData.hasChildren(['name', 'online'])"
+        }
+      }
+    }
+  }
+}
